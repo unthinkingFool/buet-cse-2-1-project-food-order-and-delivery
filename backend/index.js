@@ -9,6 +9,8 @@ import userRouter from "./routes/user.routes.js";
 import shopRouter from "./routes/restaurant.routes.js";
 import itemRouter from "./routes/item.routes.js";
 import orderRouter from "./routes/order.routes.js";
+import riderRouter from "./routes/rider.routes.js";
+import deliveryRouter from "./routes/delivery.routes.js";
 
 const app = express();
 
@@ -27,6 +29,8 @@ app.use("/api/user", userRouter);
 app.use("/api/restaurant",shopRouter)
 app.use("/api/item",itemRouter)
 app.use("/api/order", orderRouter);
+app.use("/api/rider",riderRouter);
+app.use("/api/delivery",deliveryRouter);
 
 app.listen(port, () => {
   connectDB();

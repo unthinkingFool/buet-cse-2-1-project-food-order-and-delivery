@@ -126,6 +126,12 @@ function Nav() {
               My Orders
             </button>
           )}
+          {/** delivered orders for rider */}
+          {userData.role == "rider" && (
+            <button className="hidden sm:block text-sm font-medium text-[#1F2023] px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer" onClick={()=>{navigate("/delivered-orders")}}>
+              Completed Orders
+            </button>
+          )}
 
           {/* avatar */}
           <div

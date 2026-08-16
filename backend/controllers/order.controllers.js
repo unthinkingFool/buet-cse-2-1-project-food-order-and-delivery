@@ -636,6 +636,8 @@ export const getOrders = async (req, res) => {
 };
 
 export const updateOrderStatus = async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const owner_id = req.id;
     const { shop_order_id, status } = req.body;
@@ -675,14 +677,77 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    await client.query("BEGIN");
+
+    // ============================================================
+    // 1. Get and lock the SHOP_ORDER
+    //
+    // This prevents two requests from simultaneously broadcasting
+    // the same shop order.
+    // ============================================================
+
+    const shopOrderResult = await client.query(
+      `
+      SELECT
+        so.id,
+        so.order_id,
+        so.restaurant_id,
+        so.owner_id,
+        so.subtotal,
+        so.assigned_rider_id,
+        so.status,
+        so.created_at,
+        so.updated_at,
+
+        r.name AS restaurant_name,
+        r.address AS restaurant_address,
+        r.latitude AS restaurant_latitude,
+        r.longitude AS restaurant_longitude,
+
+        fo.customer_id,
+        fo.payment_method,
+        fo.delivery_address,
+        fo.latitude AS delivery_latitude,
+        fo.longitude AS delivery_longitude,
+        fo.total_amount AS order_total_amount
+
+      FROM SHOP_ORDER so
+
+      JOIN RESTAURANT r
+        ON r.id = so.restaurant_id
+
+      JOIN FOOD_ORDER fo
+        ON fo.id = so.order_id
+
+      WHERE so.id = $1
+        AND so.owner_id = $2
+
+      FOR UPDATE
+      `,
+      [shop_order_id, owner_id],
+    );
+
+    if (shopOrderResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        message: "Shop order not found or you are not the owner",
+      });
+    }
+
+    const shopOrder = shopOrderResult.rows[0];
+
+    // ============================================================
+    // 2. Update SHOP_ORDER status
+    // ============================================================
+
+    const updatedOrderResult = await client.query(
       `
       UPDATE SHOP_ORDER
       SET
         status = $1,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
-        AND owner_id = $3
       RETURNING
         id,
         order_id,
@@ -694,24 +759,372 @@ export const updateOrderStatus = async (req, res) => {
         created_at,
         updated_at
       `,
-      [status, shop_order_id, owner_id],
+      [status, shop_order_id],
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        message: "Shop order not found or you are not the owner",
-      });
+    const updatedShopOrder = updatedOrderResult.rows[0];
+
+    // ============================================================
+    // 3. Only broadcast when:
+    //
+    //    status = out_for_delivery
+    //
+    //    AND there is no rider assignment yet.
+    // ============================================================
+
+    let broadcastedRiders = [];
+    let deliveryAssignment = null;
+    let deliveryOffer = null;
+
+    if (status === "out_for_delivery" && shopOrder.assigned_rider_id === null) {
+      // ==========================================================
+      // 4. Check whether an assignment already exists
+      // ==========================================================
+
+      const existingAssignmentResult = await client.query(
+        `
+        SELECT
+          id,
+          order_id,
+          shop_order_id,
+          restaurant_id,
+          total_amount,
+          assigned_to,
+          assignment_status,
+          accepted_at,
+          created_at
+        FROM SHOP_ORDER_DELIVERY_ASSIGNMENT
+        WHERE shop_order_id = $1
+        ORDER BY id DESC
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [shop_order_id],
+      );
+
+      if (existingAssignmentResult.rows.length === 0) {
+        // ========================================================
+        // 5. Make sure restaurant has coordinates
+        // ========================================================
+
+        if (
+          shopOrder.restaurant_latitude === null ||
+          shopOrder.restaurant_longitude === null
+        ) {
+          await client.query("ROLLBACK");
+
+          return res.status(400).json({
+            message:
+              "Restaurant latitude and longitude are required before broadcasting a delivery",
+          });
+        }
+
+        // ========================================================
+        // 6. Create ONE delivery assignment.
+        //
+        // It starts as "broadcasted".
+        // assigned_to remains NULL until a rider accepts.
+        // ========================================================
+
+        const assignmentResult = await client.query(
+          `
+          INSERT INTO SHOP_ORDER_DELIVERY_ASSIGNMENT (
+            order_id,
+            shop_order_id,
+            restaurant_id,
+            total_amount,
+            assigned_to,
+            assignment_status
+          )
+          VALUES ($1, $2, $3, $4, NULL, 'broadcasted')
+          RETURNING
+            id,
+            order_id,
+            shop_order_id,
+            restaurant_id,
+            total_amount,
+            assigned_to,
+            assignment_status,
+            accepted_at,
+            created_at
+          `,
+          [
+            shopOrder.order_id,
+            shopOrder.id,
+            shopOrder.restaurant_id,
+            shopOrder.subtotal,
+          ],
+        );
+
+        deliveryAssignment = assignmentResult.rows[0];
+
+        // ========================================================
+        // 7. Find FREE RIDERS within 1 KM
+        //
+        // Rider = CUSTOMER where role = rider
+        //
+        // Free means:
+        //
+        // A. No SHOP_ORDER currently assigned to them with an
+        //    active status.
+        //
+        // B. No active DELIVERY_ASSIGNMENT assigned to them.
+        //
+        // Previous delivered/cancelled orders do not make them busy.
+        // ========================================================
+
+        const ridersResult = await client.query(
+          `
+          SELECT
+            c.id,
+            c.name,
+            c.email,
+            c.contact_no,
+            c.latitude,
+            c.longitude,
+
+            ST_Distance(
+              c.location,
+              ST_SetSRID(
+                ST_MakePoint(
+                  r.longitude,
+                  r.latitude
+                ),
+                4326
+              )::geography
+            ) AS distance_from_restaurant
+
+          FROM CUSTOMER c
+
+          CROSS JOIN RESTAURANT r
+
+          WHERE c.role = 'rider'
+
+            AND r.id = $1
+
+            -- ====================================================
+            -- Rider must be within 1 KM of restaurant
+            -- ====================================================
+
+            AND ST_DWithin(
+              c.location,
+              ST_SetSRID(
+                ST_MakePoint(
+                  r.longitude,
+                  r.latitude
+                ),
+                4326
+              )::geography,
+              1000
+            )
+
+            -- ====================================================
+            -- Rider must not have an active SHOP_ORDER
+            -- ====================================================
+
+            AND NOT EXISTS (
+              SELECT 1
+              FROM SHOP_ORDER active_so
+
+              WHERE active_so.assigned_rider_id = c.id
+
+                AND active_so.status NOT IN (
+                  'delivered',
+                  'cancelled'
+                )
+            )
+
+            -- ====================================================
+            -- Rider must not have an active delivery assignment
+            -- ====================================================
+
+            AND NOT EXISTS (
+              SELECT 1
+              FROM SHOP_ORDER_DELIVERY_ASSIGNMENT active_da
+
+              WHERE active_da.assigned_to = c.id
+
+                AND active_da.assignment_status = 'assigned'
+            )
+
+          ORDER BY distance_from_restaurant ASC
+          `,
+          [shopOrder.restaurant_id],
+        );
+
+        // ========================================================
+        // 8. Store every eligible rider in
+        //    SHOP_ORDER_BROADCASTED_TO
+        // ========================================================
+
+        for (const rider of ridersResult.rows) {
+          const broadcastResult = await client.query(
+            `
+            INSERT INTO SHOP_ORDER_BROADCASTED_TO (
+              shop_order_id,
+              delivery_assignment_id,
+              customer_id
+            )
+            VALUES ($1, $2, $3)
+            RETURNING
+              id,
+              shop_order_id,
+              delivery_assignment_id,
+              customer_id
+            `,
+            [shopOrder.id, deliveryAssignment.id, rider.id],
+          );
+
+          broadcastedRiders.push({
+            broadcast_id: broadcastResult.rows[0].id,
+            rider_id: rider.id,
+            rider_name: rider.name,
+            rider_contact_no:rider.contact_no,
+            rider_latitude: rider.latitude,
+            rider_longitude: rider.longitude,
+            distance_from_restaurant: Number(rider.distance_from_restaurant),
+          });
+
+          // ======================================================
+          // 9. Create persistent notification
+          //
+          // Socket.IO can later send the same offer in real time.
+          // ======================================================
+
+          await client.query(
+            `
+            INSERT INTO NOTIFICATION (
+              recipient_role,
+              recipient_id,
+              type,
+              title,
+              message,
+              reference_id
+            )
+            VALUES (
+              'rider',
+              $1,
+              'delivery_offer',
+              $2,
+              $3,
+              $4
+            )
+            `,
+            [
+              rider.id,
+
+              `New delivery available from ${shopOrder.restaurant_name}`,
+
+              `A new delivery is available. Delivery address: ${shopOrder.delivery_address}. Payment: ${shopOrder.payment_method}. Shop order amount: ${shopOrder.subtotal}.`,
+
+              shopOrder.id,
+            ],
+          );
+        }
+
+        // ========================================================
+        // 10. Prepare complete delivery offer
+        //
+        // This is the information the rider dashboard can display.
+        // ========================================================
+
+        const itemsResult = await client.query(
+          `
+          SELECT
+            oi.id,
+            oi.item_id,
+            i.name,
+            i.image_link,
+            oi.price,
+            oi.quantity,
+            (oi.price * oi.quantity) AS item_total
+
+          FROM ORDER_ITEM oi
+
+          JOIN ITEM i
+            ON i.id = oi.item_id
+
+          WHERE oi.shop_order_id = $1
+
+          ORDER BY oi.id
+          `,
+          [shopOrder.id],
+        );
+
+        deliveryOffer = {
+          shop_order_id: shopOrder.id,
+          order_id: shopOrder.order_id,
+          delivery_assignment_id: deliveryAssignment.id,
+
+          restaurant: {
+            id: shopOrder.restaurant_id,
+            name: shopOrder.restaurant_name,
+            address: shopOrder.restaurant_address,
+            latitude: shopOrder.restaurant_latitude,
+            longitude: shopOrder.restaurant_longitude,
+          },
+
+          delivery: {
+            customer_id: shopOrder.customer_id,
+            address: shopOrder.delivery_address,
+            latitude: shopOrder.delivery_latitude,
+            longitude: shopOrder.delivery_longitude,
+          },
+
+          items: itemsResult.rows,
+
+          payment: {
+            method: shopOrder.payment_method,
+            shop_order_amount: shopOrder.subtotal,
+            complete_order_amount: shopOrder.order_total_amount,
+          },
+
+          rider_count: broadcastedRiders.length,
+          riders: broadcastedRiders,
+        };
+      } else {
+        // ========================================================
+        // Assignment already exists.
+        //
+        // Do NOT create another assignment or broadcast again.
+        // ========================================================
+
+        deliveryAssignment = existingAssignmentResult.rows[0];
+      }
     }
 
+    // ============================================================
+    // 11. Commit everything
+    // ============================================================
+
+    await client.query("COMMIT");
+
     return res.status(200).json({
-      message: "Order status updated successfully",
-      shopOrder: result.rows[0],
+      message:
+        status === "out_for_delivery" && broadcastedRiders.length > 0
+          ? "Order marked out for delivery and broadcasted to nearby riders"
+          : status === "out_for_delivery"
+            ? "Order marked out for delivery, but no eligible nearby riders were found"
+            : "Order status updated successfully",
+
+      shopOrder: updatedShopOrder,
+
+      deliveryAssignment,
+
+      broadcastedRiders,
+
+      deliveryOffer,
     });
   } catch (error) {
+    await client.query("ROLLBACK");
+
     console.error("UPDATE ORDER STATUS ERROR:", error);
 
     return res.status(500).json({
       message: "Error while updating order status",
+      error: error.message,
     });
+  } finally {
+    client.release();
   }
 };

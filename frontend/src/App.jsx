@@ -19,6 +19,7 @@ import CheckOut from "./pages/CheckOut";
 import OrderPlaced from "./pages/OrderPlaced";
 import MyOrders from "./pages/MyOrders";
 import useGetMyOrders from "./hooks/useGetMyOrders";
+import DeliveredOrders from "./pages/DeliveredOrders";
 
 export const serverUrl = "http://localhost:3000";
 
@@ -84,6 +85,10 @@ function App() {
       <Route
         path="/my-orders"
         element={userData ? <MyOrders /> : <Navigate to="/signin" />}
+      />
+      <Route
+        path="/delivered-orders"
+        element={userData ? <DeliveredOrders /> : <Navigate to="/signin" />}
       />
     </Routes>
   );

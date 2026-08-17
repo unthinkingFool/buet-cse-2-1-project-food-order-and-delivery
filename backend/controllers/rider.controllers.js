@@ -465,3 +465,161 @@ export const acceptShopOrder = async (req, res) => {
     client.release();
   }
 };
+
+export const getMyAssignedOrders = async (req, res) => {
+  try {
+    const rider_id = req.id;
+
+    // Make sure the logged-in user is a rider
+    if (req.role !== "rider") {
+      return res.status(403).json({
+        message: "Only riders can view assigned orders",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        so.id AS shop_order_id,
+        so.order_id,
+        so.restaurant_id,
+        so.owner_id,
+        so.subtotal,
+        so.assigned_rider_id,
+        so.status,
+        so.created_at,
+        so.updated_at,
+
+        -- Restaurant information
+        r.name AS restaurant_name,
+        r.image_link AS restaurant_image,
+        r.address AS restaurant_address,
+        r.city AS restaurant_city,
+        r.contact_no AS restaurant_contact,
+        r.latitude AS restaurant_latitude,
+        r.longitude AS restaurant_longitude,
+
+        -- Customer information
+        c.id AS customer_id,
+        c.name AS customer_name,
+        c.email AS customer_email,
+        c.contact_no AS customer_contact,
+
+        -- Delivery information
+        fo.delivery_address,
+        fo.latitude AS delivery_latitude,
+        fo.longitude AS delivery_longitude,
+        fo.payment_method,
+        fo.total_amount
+
+      FROM SHOP_ORDER so
+
+      JOIN RESTAURANT r
+        ON so.restaurant_id = r.id
+
+      JOIN FOOD_ORDER fo
+        ON so.order_id = fo.id
+
+      JOIN CUSTOMER c
+        ON fo.customer_id = c.id
+
+      WHERE so.assigned_rider_id = $1
+        AND so.status != 'delivered'
+
+      ORDER BY so.created_at DESC
+      `,
+      [rider_id],
+    );
+
+    return res.status(200).json({
+      message: "Assigned orders fetched successfully",
+      orders: result.rows,
+    });
+  } catch (error) {
+    console.error("GET MY ASSIGNED ORDERS ERROR:", error);
+
+    return res.status(500).json({
+      message: "Error while fetching assigned orders",
+    });
+  }
+};
+
+export const getDeliveredOrders = async (req, res) => {
+  try {
+    const rider_id = req.id;
+
+    // Make sure the logged-in user is a rider
+    if (req.role !== "rider") {
+      return res.status(403).json({
+        message: "Only riders can view delivered orders",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        so.id AS shop_order_id,
+        so.order_id,
+        so.restaurant_id,
+        so.owner_id,
+        so.subtotal,
+        so.assigned_rider_id,
+        so.status,
+        so.created_at,
+        so.updated_at,
+
+        -- Restaurant information
+        r.name AS restaurant_name,
+        r.image_link AS restaurant_image,
+        r.address AS restaurant_address,
+        r.city AS restaurant_city,
+        r.contact_no AS restaurant_contact,
+        r.latitude AS restaurant_latitude,
+        r.longitude AS restaurant_longitude,
+
+        -- Customer information
+        c.id AS customer_id,
+        c.name AS customer_name,
+        c.email AS customer_email,
+        c.contact_no AS customer_contact,
+
+        -- Delivery information
+        fo.delivery_address,
+        fo.latitude AS delivery_latitude,
+        fo.longitude AS delivery_longitude,
+        fo.payment_method,
+        fo.total_amount
+
+      FROM SHOP_ORDER so
+
+      JOIN RESTAURANT r
+        ON so.restaurant_id = r.id
+
+      JOIN FOOD_ORDER fo
+        ON so.order_id = fo.id
+
+      JOIN CUSTOMER c
+        ON fo.customer_id = c.id
+
+      WHERE so.assigned_rider_id = $1
+        AND so.status = 'delivered'
+        AND so.status != 'cancelled'
+
+      ORDER BY so.created_at DESC
+      `,
+      [rider_id],
+    );
+
+    return res.status(200).json({
+      message: "Delivered orders fetched successfully",
+      orders: result.rows,
+    });
+  } catch (error) {
+    console.error("GET MY DELIVERED ORDERS ERROR:", error);
+
+    return res.status(500).json({
+      message: "Error while fetching delivered orders",
+    });
+  }
+};
+

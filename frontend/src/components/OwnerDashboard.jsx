@@ -8,7 +8,11 @@ import useMyItems from "../hooks/useMyItems.jsx";
 
 import axios from "axios";
 import { serverUrl } from "../App";
-import { deleteItem } from "../redux/ownerSlice";
+import {
+  deleteItem,
+  setRestaurantStatus,
+  updateItemAvailability,
+} from "../redux/ownerSlice";
 import {
   Store,
   Pencil,
@@ -31,7 +35,9 @@ function OwnerDashboard() {
   const [deletingId, setdeletingId] = useState(null);
 
   const handleDeleteItem = async (itemId) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this item?");
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this item?",
+    );
 
     if (!confirmDelete) {
       return;
@@ -39,9 +45,12 @@ function OwnerDashboard() {
 
     setdeletingId(itemId);
     try {
-      const result = await axios.delete(`${serverUrl}/api/item/delete-item/${itemId}`, {
-        withCredentials: true,
-      });
+      const result = await axios.delete(
+        `${serverUrl}/api/item/delete-item/${itemId}`,
+        {
+          withCredentials: true,
+        },
+      );
 
       console.log(result.data);
 
@@ -53,7 +62,47 @@ function OwnerDashboard() {
       setdeletingId(null);
     }
   };
+  const handleToggleItemAvailability = async (itemId) => {
+    try {
+      const result = await axios.patch(
+        `${serverUrl}/api/item/toggle-availability/${itemId}`,
+        {},
+        {
+          withCredentials: true,
+        },
+      );
 
+      console.log(result.data);
+
+      // Update the item in Redux
+      dispatch(
+        updateItemAvailability({
+          itemId,
+          isavailable: result.data.item.isavailable,
+        }),
+      );
+    } catch (error) {
+      console.log("error while changing item availability:", error);
+    }
+  };
+
+  const handleToggleRestaurantStatus = async () => {
+    try {
+      const result = await axios.patch(
+        `${serverUrl}/api/restaurant/toggle-status`,
+        {},
+        {
+          withCredentials: true,
+        },
+      );
+
+      console.log(result.data);
+
+      dispatch(setRestaurantStatus(result.data.restaurant.status));
+    } catch (error) {
+      console.log("error while changing restaurant status:", error);
+    }
+  };
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
       <Nav />
@@ -65,7 +114,9 @@ function OwnerDashboard() {
             <div className="h-14 w-14 rounded-2xl bg-[#FF5A36]/10 flex items-center justify-center mb-4">
               <Store className="h-7 w-7 text-[#FF5A36]" />
             </div>
-            <h1 className="text-xl font-bold text-[#1F2023]">Add Your Restaurant</h1>
+            <h1 className="text-xl font-bold text-[#1F2023]">
+              Add Your Restaurant
+            </h1>
             <p className="text-sm text-gray-500 mt-1 max-w-sm">
               Join our platform to serve delicious food
             </p>
@@ -86,6 +137,26 @@ function OwnerDashboard() {
             <h1 className="text-2xl font-bold text-[#1F2023]">
               Welcome to {restaurantData.restaurant.name}
             </h1>
+            <button
+              onClick={handleToggleRestaurantStatus}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition cursor-pointer ${
+                restaurantData.restaurant.status === "open"
+                  ? "bg-[#FF5A36] hover:bg-[#e94e2c]"
+                  : "bg-gray-500 hover:bg-gray-600"
+              }`}
+            >
+              {restaurantData.restaurant.status === "open" ? (
+                <>
+                  <Store className="h-4 w-4" />
+                  Open
+                </>
+              ) : (
+                <>
+                  <Store className="h-4 w-4" />
+                  Closed
+                </>
+              )}
+            </button>
 
             {/* restaurant profile card */}
             <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
@@ -129,7 +200,9 @@ function OwnerDashboard() {
             {/* FOOD ITEMS */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-[#1F2023]">My Food Items</h2>
+                <h2 className="text-lg font-bold text-[#1F2023]">
+                  My Food Items
+                </h2>
                 <button
                   onClick={() => {
                     navigate("/add-food");
@@ -180,7 +253,9 @@ function OwnerDashboard() {
                         </div>
 
                         <div className="flex items-baseline gap-2 mt-2">
-                          <p className="text-sm font-bold text-[#1F2023]">৳{item.price}</p>
+                          <p className="text-sm font-bold text-[#1F2023]">
+                            ৳{item.price}
+                          </p>
                           {item.discount_price && (
                             <p className="text-xs text-gray-400 line-through">
                               ৳{item.discount_price}
@@ -196,6 +271,20 @@ function OwnerDashboard() {
                             <Pencil className="h-3.5 w-3.5" />
                             Edit
                           </button>
+
+                          <button
+                            onClick={() =>
+                              handleToggleItemAvailability(item.id)
+                            }
+                            className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition cursor-pointer ${
+                              item.isavailable
+                                ? "border-green-200 text-green-600 hover:bg-green-50"
+                                : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                            }`}
+                          >
+                            {item.isavailable ? "Available" : "Unavailable"}
+                          </button>
+
                           <button
                             onClick={() => handleDeleteItem(item.id)}
                             disabled={deletingId === item.id}

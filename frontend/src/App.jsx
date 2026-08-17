@@ -19,7 +19,11 @@ import CheckOut from "./pages/CheckOut";
 import OrderPlaced from "./pages/OrderPlaced";
 import MyOrders from "./pages/MyOrders";
 import useGetMyOrders from "./hooks/useGetMyOrders";
-import DeliveredOrders from "./pages/DeliveredOrders";
+import RiderDeliveredOrders from "./pages/RiderDeliveredOrders";
+import OwnerDeliveredOrders from "./pages/OwnerDeliveredOrders";
+import CustomerReceivedOrders from "./pages/CustomerReceivedOrders";
+import RestaurantCard from "./components/RestaurantCard";
+import TrackOrder from "./pages/TrackOrder";
 
 export const serverUrl = "http://localhost:3000";
 
@@ -88,7 +92,29 @@ function App() {
       />
       <Route
         path="/delivered-orders"
-        element={userData ? <DeliveredOrders /> : <Navigate to="/signin" />}
+        element={
+          userData ? <RiderDeliveredOrders /> : <Navigate to="/signin" />
+        }
+      />
+      <Route
+        path="/owner-delivered-orders"
+        element={
+          userData ? <OwnerDeliveredOrders /> : <Navigate to="/signin" />
+        }
+      />
+      <Route
+        path="/user-received-orders"
+        element={
+          userData ? <CustomerReceivedOrders /> : <Navigate to="/signin" />
+        }
+      />
+      <Route
+        path="/restaurant/:restaurantId"
+        element={userData ? <RestaurantCard /> : <Navigate to="/signin" />}
+      />
+      <Route
+        path="/track-shop-order/:shop_order_id"
+        element={userData ? <TrackOrder /> : <Navigate to="/signin" />}
       />
     </Routes>
   );

@@ -2,6 +2,7 @@ import express from "express";
 
 import {
   getCurrentUser,
+  getMyReceivedOrders,
   updateUserLocation,
 } from "../controllers/user.controllers.js";
 
@@ -20,5 +21,10 @@ userRouter.put(
   isAuth,
   updateUserLocation
 );
+userRouter.get(
+  "/received-orders",
+  isAuth,
+  getMyReceivedOrders
+)
 
 export default userRouter;

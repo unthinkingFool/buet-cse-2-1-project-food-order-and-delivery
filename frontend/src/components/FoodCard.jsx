@@ -22,6 +22,7 @@ function FoodCard({ data }) {
   };
 
   const isVeg = data.food_type == "veg";
+  const isAvailable = data.isavailable !== false;
 
   return (
     <div className="w-full max-w-[260px] rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden transition-shadow hover:shadow-md">
@@ -80,6 +81,7 @@ function FoodCard({ data }) {
         <div className="flex items-center justify-between mt-3 rounded-lg border border-gray-200 px-2 py-1.5">
           <button
             onClick={handleDecrease}
+            disabled={!isAvailable}
             aria-label="add less"
             className="h-6 w-6 flex items-center justify-center rounded-md text-[#1F2023] hover:bg-gray-100 transition-colors cursor-pointer"
           >
@@ -90,6 +92,7 @@ function FoodCard({ data }) {
           </h1>
           <button
             onClick={handleIncrease}
+            disabled={!isAvailable}
             aria-label="add more"
             className="h-6 w-6 flex items-center justify-center rounded-md text-[#1F2023] hover:bg-gray-100 transition-colors cursor-pointer"
           >
@@ -100,6 +103,7 @@ function FoodCard({ data }) {
         {/* add to cart */}
         <div className="mt-2">
           <button
+            disabled={!isAvailable}
             onClick={() => {
               quantity > 0
                 ? dispatch(
@@ -116,10 +120,17 @@ function FoodCard({ data }) {
                   )
                 : null;
             }}
-            className={`${cartItems.some((i) => i.id == data.id) ? "bg-gray-800" : "bg-[#FF5A36]"} w-full flex items-center justify-center gap-1.5 rounded-lg  py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#e94e2c] active:scale-[0.99] cursor-pointer`}
+            className={`${
+              !isAvailable
+                ? "bg-gray-300 cursor-not-allowed"
+                : cartItems.some((i) => i.id == data.id)
+                  ? "bg-gray-800"
+                  : "bg-[#FF5A36] hover:bg-[#e94e2c]"
+            } w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white shadow-sm transition active:scale-[0.99]`}
           >
             <ShoppingCart className="h-3.5 w-3.5" />
-            Add to cart
+
+            {!isAvailable ? "Unavailable" : "Add to cart"}
           </button>
         </div>
       </div>

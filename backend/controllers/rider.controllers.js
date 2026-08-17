@@ -505,6 +505,10 @@ export const getMyAssignedOrders = async (req, res) => {
         c.email AS customer_email,
         c.contact_no AS customer_contact,
 
+        --Rider Information
+        rider.latitude AS rider_latitude,
+        rider.longitude AS rider_longitude,
+
         -- Delivery information
         fo.delivery_address,
         fo.latitude AS delivery_latitude,
@@ -522,6 +526,9 @@ export const getMyAssignedOrders = async (req, res) => {
 
       JOIN CUSTOMER c
         ON fo.customer_id = c.id
+      
+      JOIN CUSTOMER rider
+        ON rider.id=$1
 
       WHERE so.assigned_rider_id = $1
         AND so.status != 'delivered'
@@ -577,18 +584,30 @@ export const getDeliveredOrders = async (req, res) => {
         r.latitude AS restaurant_latitude,
         r.longitude AS restaurant_longitude,
 
-        -- Customer information
-        c.id AS customer_id,
-        c.name AS customer_name,
-        c.email AS customer_email,
-        c.contact_no AS customer_contact,
-
         -- Delivery information
         fo.delivery_address,
         fo.latitude AS delivery_latitude,
         fo.longitude AS delivery_longitude,
+
+        -- Payment information
         fo.payment_method,
-        fo.total_amount
+        fo.total_amount,
+
+        -- Ordered items
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'order_item_id', oi.id,
+              'item_id', oi.item_id,
+              'item_name', i.name,
+              'item_image', i.image_link,
+              'price', oi.price,
+              'quantity', oi.quantity,
+              'item_total', oi.price * oi.quantity
+            )
+          ) FILTER (WHERE oi.id IS NOT NULL),
+          '[]'
+        ) AS items
 
       FROM SHOP_ORDER so
 
@@ -598,14 +617,41 @@ export const getDeliveredOrders = async (req, res) => {
       JOIN FOOD_ORDER fo
         ON so.order_id = fo.id
 
-      JOIN CUSTOMER c
-        ON fo.customer_id = c.id
+      LEFT JOIN ORDER_ITEM oi
+        ON so.id = oi.shop_order_id
+
+      LEFT JOIN ITEM i
+        ON oi.item_id = i.id
 
       WHERE so.assigned_rider_id = $1
         AND so.status = 'delivered'
-        AND so.status != 'cancelled'
 
-      ORDER BY so.created_at DESC
+      GROUP BY
+        so.id,
+        so.order_id,
+        so.restaurant_id,
+        so.owner_id,
+        so.subtotal,
+        so.assigned_rider_id,
+        so.status,
+        so.created_at,
+        so.updated_at,
+
+        r.name,
+        r.image_link,
+        r.address,
+        r.city,
+        r.contact_no,
+        r.latitude,
+        r.longitude,
+
+        fo.delivery_address,
+        fo.latitude,
+        fo.longitude,
+        fo.payment_method,
+        fo.total_amount
+
+      ORDER BY so.updated_at DESC
       `,
       [rider_id],
     );

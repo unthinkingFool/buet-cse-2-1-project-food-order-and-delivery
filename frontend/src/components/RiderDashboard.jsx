@@ -19,7 +19,10 @@ function RiderDashboard() {
   const navigate = useNavigate();
   const [shopOrders, setShopOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-
+  const [showOTP, setshowOTP] = useState(false);
+  const handleShowOTP=()=>{
+    setshowOTP(true);
+  }
   const handleAccept = async (shopOrderId) => {
     try {
       console.log("ACCEPTING SHOP ORDER:", shopOrderId);
@@ -147,35 +150,40 @@ function RiderDashboard() {
             {assignedOrders.map((order) => (
               <div key={order.shop_order_id}>
                 <div>
-                <h2>Shop: {order.restaurant_name}</h2>
+                  <h2>Shop: {order.restaurant_name}</h2>
 
-                <p>Order ID: {order.order_id}</p>
-                <p>Status: {order.status}</p>
+                  <p>Order ID: {order.order_id}</p>
+                  <p>Status: {order.status}</p>
 
-                <p>Customer: {order.customer_name}</p>
+                  <p>Customer: {order.customer_name}</p>
 
-                <p>Customer Contact: {order.customer_contact}</p>
+                  <p>Customer Contact: {order.customer_contact}</p>
 
-                <p>Delivery Address: {order.delivery_address}</p>
+                  <p>Delivery Address: {order.delivery_address}</p>
 
-                <p>
-                  Delivery Location: {order.delivery_latitude},{" "}
-                  {order.delivery_longitude}
-                </p>
+                  <p>
+                    Delivery Location: {order.delivery_latitude},{" "}
+                    {order.delivery_longitude}
+                  </p>
 
-                <p>
-                  Restaurant Location: {order.restaurant_latitude},{" "}
-                  {order.restaurant_longitude}
-                </p>
+                  <p>
+                    Restaurant Location: {order.restaurant_latitude},{" "}
+                    {order.restaurant_longitude}
+                  </p>
 
-                <p>Total: ৳{order.total_amount}</p>
+                  <p>Total: ৳{order.total_amount}</p>
                 </div>
                 <div>
-                  <RiderTracking data={order}/>
+                  <RiderTracking data={order} />
+                </div>
+                <div>
+                  {!showOTP ? <button onClick={handleShowOTP}>Mark As Delivered</button> : <div>
+                    <p>Enter OTP From {order.customer_name} : </p>
+                    <input type="text" />
+                    <button>Submit</button>
+                    </div>}
                 </div>
               </div>
-              
-
             ))}
           </div>
         ) : (

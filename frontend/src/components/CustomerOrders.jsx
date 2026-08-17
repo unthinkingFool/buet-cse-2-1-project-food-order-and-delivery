@@ -1,7 +1,9 @@
 import React from "react";
 import { MapPin, Package, Store,Truck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function CustomerOrders({ orders = [] }) {
+  const navigate=useNavigate()
   if (!orders.length) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -153,10 +155,10 @@ function CustomerOrders({ orders = [] }) {
                   ))}
                 </div>
                 <div className="mt-3">
-                  <button
-                    disabled={!shopOrder.assigned_rider_id}
+                  <button onClick={()=>{navigate(`/track-shop-order/${shopOrder.id}`)}}
+                    disabled={!shopOrder.assigned_rider_id || shopOrder.status=='delivered'}
                     className={`w-full flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100 ${
-                      shopOrder.assigned_rider_id
+                      (shopOrder.assigned_rider_id && shopOrder.status!='delivered')
                         ? "border-[#FF5A36] text-[#FF5A36] hover:bg-[#FF5A36] hover:text-white"
                         : "border-gray-200 text-gray-400 bg-gray-50"
                     }`}

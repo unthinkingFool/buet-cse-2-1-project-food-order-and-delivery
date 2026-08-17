@@ -11,6 +11,7 @@ const userSlice = createSlice({
     cartItems: [],
     totalAmount: 0,
     myOrders: [],
+    receivedOrders: [],
   },
   reducers: {
     setUserData: (state, action) => {
@@ -88,6 +89,9 @@ const userSlice = createSlice({
         }
       }
     },
+    setReceivedOrders: (state, action) => {
+      state.receivedOrders = action.payload;
+    },
   },
 });
 
@@ -103,6 +107,7 @@ export const {
   clearCart,
   setMyOrders,
   addMyOrder,
-  updateorderStatus
+  updateorderStatus,
+  setReceivedOrders
 } = userSlice.actions;
 export default userSlice.reducer;

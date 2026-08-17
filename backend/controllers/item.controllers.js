@@ -211,3 +211,91 @@ export const deleteItem = async (req, res) => {
     });
   }
 };
+
+export const toggleItemAvailability = async (req, res) => {
+  try {
+    const owner_id = req.id;
+    const { item_id } = req.params;
+
+    // ==========================================
+    // Validate item ID
+    // ==========================================
+
+    if (!item_id) {
+      return res.status(400).json({
+        message: "Item ID is required",
+      });
+    }
+
+    // ==========================================
+    // Owner-only endpoint
+    // ==========================================
+
+    if (req.role !== "owner") {
+      return res.status(403).json({
+        message: "Only restaurant owners can change item availability",
+      });
+    }
+
+    // ==========================================
+    // Find item and verify ownership
+    // ==========================================
+
+    const itemResult = await pool.query(
+      `
+      SELECT
+        i.id,
+        i.name,
+        i.isavailable,
+        i.restaurant_id,
+        r.owner_id
+      FROM ITEM i
+      JOIN RESTAURANT r
+        ON i.restaurant_id = r.id
+      WHERE i.id = $1
+        AND r.owner_id = $2
+      `,
+      [item_id, owner_id],
+    );
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({
+        message: "Item not found or you do not own this item",
+      });
+    }
+
+    const item = itemResult.rows[0];
+
+    // ==========================================
+    // Toggle availability
+    // ==========================================
+
+    const newAvailability = !item.isavailable;
+
+    const result = await pool.query(
+      `
+      UPDATE ITEM
+      SET
+        isavailable = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING *
+      `,
+      [newAvailability, item_id],
+    );
+
+    return res.status(200).json({
+      message: newAvailability
+        ? "Item is now available"
+        : "Item is now unavailable",
+
+      item: result.rows[0],
+    });
+  } catch (error) {
+    console.error("TOGGLE ITEM AVAILABILITY ERROR:", error);
+
+    return res.status(500).json({
+      message: "Error while changing item availability",
+    });
+  }
+};

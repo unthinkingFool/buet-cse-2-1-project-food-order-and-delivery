@@ -35,10 +35,31 @@ const ownerSlice = createSlice({
     deleteItem: (state, action) => {
       state.items = state.items.filter((item) => item.id !== action.payload);
     },
+    setRestaurantStatus: (state, action) => {
+      if (state.restaurantData?.restaurant) {
+        state.restaurantData.restaurant.status = action.payload;
+      }
+    },
+    updateItemAvailability: (state, action) => {
+      const { itemId, isavailable } = action.payload;
+
+      const item = state.items.find((item) => item.id === itemId);
+
+      if (item) {
+        item.isavailable = isavailable;
+      }
+    },
   },
 });
 
-export const { setRestaurantData, setItems, addItem, updateItem, deleteItem } =
-  ownerSlice.actions;
+export const {
+  setRestaurantData,
+  setItems,
+  addItem,
+  updateItem,
+  deleteItem,
+  setRestaurantStatus,
+  updateItemAvailability
+} = ownerSlice.actions;
 
 export default ownerSlice.reducer;

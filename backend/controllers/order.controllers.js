@@ -511,7 +511,7 @@ export const getOrders = async (req, res) => {
         INNER JOIN ITEM i
           ON oi.item_id = i.id
 
-        WHERE so.owner_id = $1
+        WHERE so.owner_id = $1 AND so.status!='delivered'
 
         ORDER BY so.created_at DESC, so.id, oi.id
         `,
@@ -762,7 +762,7 @@ export const updateOrderStatus = async (req, res) => {
       [status, shop_order_id],
     );
 
-    const updatedShopOrder = updatedOrderResult.rows[0];
+    let updatedShopOrder = updatedOrderResult.rows[0];
 
     // ============================================================
     // 3. Only broadcast when:
@@ -979,7 +979,7 @@ export const updateOrderStatus = async (req, res) => {
             broadcast_id: broadcastResult.rows[0].id,
             rider_id: rider.id,
             rider_name: rider.name,
-            rider_contact_no:rider.contact_no,
+            rider_contact_no: rider.contact_no,
             rider_latitude: rider.latitude,
             rider_longitude: rider.longitude,
             distance_from_restaurant: Number(rider.distance_from_restaurant),
@@ -1020,6 +1020,52 @@ export const updateOrderStatus = async (req, res) => {
               shopOrder.id,
             ],
           );
+        }
+
+        // ========================================================
+        // 8.5. NO RIDERS AVAILABLE
+        // ========================================================
+
+        if (broadcastedRiders.length === 0) {
+          // Delete the empty delivery assignment.
+          // This is VERY important because otherwise the next
+          // "out_for_delivery" request will see an existing
+          // assignment and won't broadcast again.
+
+          await client.query(
+            `
+    DELETE FROM SHOP_ORDER_DELIVERY_ASSIGNMENT
+    WHERE id = $1
+    `,
+            [deliveryAssignment.id],
+          );
+
+          // Change shop order back to preparing
+          const preparingOrderResult = await client.query(
+            `
+              UPDATE SHOP_ORDER
+              SET
+                status = 'preparing',
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = $1
+              RETURNING
+                id,
+                order_id,
+                restaurant_id,
+                owner_id,
+                subtotal,
+                assigned_rider_id,
+                status,
+                created_at,
+                updated_at
+              `,
+            [shopOrder.id],
+          );
+
+          updatedShopOrder = preparingOrderResult.rows[0];
+
+          deliveryAssignment = null;
+          deliveryOffer = null;
         }
 
         // ========================================================
@@ -1126,5 +1172,183 @@ export const updateOrderStatus = async (req, res) => {
     });
   } finally {
     client.release();
+  }
+};
+
+export const getShopOrderById = async (req, res) => {
+  try {
+    const customer_id = req.id;
+    const { shop_order_id } = req.params;
+
+    if (!shop_order_id) {
+      return res.status(400).json({
+        message: "Shop order ID is required",
+      });
+    }
+
+    // Customer-only endpoint
+    if (req.role !== "customer") {
+      return res.status(403).json({
+        message: "Only customers can view their shop orders",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        -- Shop order
+        so.id AS shop_order_id,
+        so.order_id,
+        so.restaurant_id,
+        so.owner_id,
+        so.subtotal,
+        so.assigned_rider_id,
+        so.status AS shop_order_status,
+        so.created_at AS shop_order_created_at,
+        so.updated_at AS shop_order_updated_at,
+
+        -- Restaurant
+        r.name AS restaurant_name,
+        r.image_link AS restaurant_image,
+        r.address AS restaurant_address,
+        r.city AS restaurant_city,
+        r.contact_no AS restaurant_contact,
+        r.latitude AS restaurant_latitude,
+        r.longitude AS restaurant_longitude,
+        r.rating AS restaurant_rating,
+
+        -- Customer / delivery
+        fo.customer_id,
+        fo.delivery_address,
+        fo.latitude AS delivery_latitude,
+        fo.longitude AS delivery_longitude,
+
+        -- Order
+        fo.payment_method,
+        fo.total_amount,
+        fo.created_at AS order_created_at,
+        fo.updated_at AS order_updated_at,
+
+        -- Rider
+        rider.id AS rider_id,
+        rider.name AS rider_name,
+        rider.contact_no AS rider_contact,
+        rider.latitude AS rider_latitude,
+        rider.longitude AS rider_longitude
+
+      FROM SHOP_ORDER so
+
+      JOIN FOOD_ORDER fo
+        ON so.order_id = fo.id
+
+      JOIN RESTAURANT r
+        ON so.restaurant_id = r.id
+
+      LEFT JOIN CUSTOMER rider
+        ON so.assigned_rider_id = rider.id
+        AND rider.role = 'rider'
+
+      WHERE so.id = $1
+        AND fo.customer_id = $2
+      `,
+      [shop_order_id, customer_id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        message: "Shop order not found",
+      });
+    }
+
+    const order = result.rows[0];
+
+    // Get items belonging to this shop order
+    const itemsResult = await pool.query(
+      `
+      SELECT
+        oi.id AS order_item_id,
+        oi.item_id,
+        i.name AS item_name,
+        i.image_link AS item_image,
+        i.category,
+        i.food_type,
+        oi.price,
+        oi.quantity,
+        (oi.price * oi.quantity) AS item_total
+
+      FROM ORDER_ITEM oi
+
+      JOIN ITEM i
+        ON oi.item_id = i.id
+
+      WHERE oi.shop_order_id = $1
+
+      ORDER BY oi.id ASC
+      `,
+      [shop_order_id],
+    );
+
+    return res.status(200).json({
+      message: "Shop order fetched successfully",
+
+      order: {
+        shop_order_id: order.shop_order_id,
+        order_id: order.order_id,
+        restaurant_id: order.restaurant_id,
+
+        deliveryAddress: {
+          latitude: order.delivery_latitude,
+          longitude: order.delivery_longitude,
+        },
+
+        status: order.shop_order_status,
+
+        subtotal: order.subtotal,
+
+        created_at: order.shop_order_created_at,
+        updated_at: order.shop_order_updated_at,
+
+        restaurant: {
+          id: order.restaurant_id,
+          name: order.restaurant_name,
+          image: order.restaurant_image,
+          address: order.restaurant_address,
+          city: order.restaurant_city,
+          contact_no: order.restaurant_contact,
+          latitude: order.restaurant_latitude,
+          longitude: order.restaurant_longitude,
+          rating: order.restaurant_rating,
+        },
+
+        delivery: {
+          address: order.delivery_address,
+          latitude: order.delivery_latitude,
+          longitude: order.delivery_longitude,
+        },
+
+        payment: {
+          method: order.payment_method,
+          total_amount: order.total_amount,
+        },
+
+        rider: order.rider_id
+          ? {
+              id: order.rider_id,
+              name: order.rider_name,
+              contact_no: order.rider_contact,
+              latitude: order.rider_latitude,
+              longitude: order.rider_longitude,
+            }
+          : null,
+
+        items: itemsResult.rows,
+      },
+    });
+  } catch (error) {
+    console.error("GET SHOP ORDER BY ID ERROR:", error);
+
+    return res.status(500).json({
+      message: "Error while fetching shop order",
+    });
   }
 };

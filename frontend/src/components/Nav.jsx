@@ -85,7 +85,7 @@ function Nav() {
                   className="hidden sm:flex items-center gap-1.5 rounded-lg bg-[#FF5A36] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e94e2c] cursor-pointer"
                 >
                   <Plus className="h-4 w-4" />
-                  addItem
+                  Add Food
                 </button>
               )}
             </>
@@ -127,9 +127,21 @@ function Nav() {
             </button>
           )}
           {/** delivered orders for rider */}
-          {userData.role == "rider" && (
+          {(userData.role == "rider") && (
             <button className="hidden sm:block text-sm font-medium text-[#1F2023] px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer" onClick={()=>{navigate("/delivered-orders")}}>
               Completed Orders
+            </button>
+          )}
+          {/** delivered orders for restaurant */}
+          {(userData.role == "owner") && (
+            <button className="hidden sm:block text-sm font-medium text-[#1F2023] px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer" onClick={()=>{navigate("/owner-delivered-orders")}}>
+              Completed Orders
+            </button>
+          )}
+          {/** received orders for customers */}
+          {(userData.role == "customer") && (
+            <button className="hidden sm:block text-sm font-medium text-[#1F2023] px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer" onClick={()=>{navigate("/user-received-orders")}}>
+              Received Orders
             </button>
           )}
 

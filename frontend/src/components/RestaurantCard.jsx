@@ -1,6 +1,7 @@
 import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin, Phone, Star } from "lucide-react";
+import { motion } from "framer-motion";
 
 import { useSelector } from "react-redux";
 
@@ -27,8 +28,35 @@ function RestaurantCard() {
   const restaurantData =
     restaurant || shopFromRedux;
 
+  // ==========================================
+  // ANIMATION VARIANTS
+  // ==========================================
+  const sectionVariants = {
+    hidden: { opacity: 0, y: 16 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: 0.1 + i * 0.1, duration: 0.4, ease: "easeOut" },
+    }),
+  };
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 14 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: 0.05 * i, duration: 0.3, ease: "easeOut" },
+    }),
+  };
+
   return (
-    <div className="min-h-screen bg-[#FAFAF8]">
+    <motion.div
+      initial={{ opacity: 0, x: -30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 30 }}
+      transition={{ duration: 0.35, ease: "easeInOut" }}
+      className="min-h-screen bg-[#FAFAF8]"
+    >
       <Nav />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
@@ -36,7 +64,7 @@ function RestaurantCard() {
         {/* Back */}
         <button
           onClick={() => navigate("/")}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#FF5A36] transition-colors cursor-pointer mb-6"
+          className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-gray-500 hover:text-[#FF5A36] transition-colors cursor-pointer mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -44,7 +72,10 @@ function RestaurantCard() {
 
         {/* Loading */}
         {loading && !restaurantData && (
-          <div className="rounded-2xl bg-white border border-gray-100 p-10 text-center">
+          <div
+            style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+            className="border-2 border-[#1F2023] bg-white p-10 text-center"
+          >
             <p className="text-sm text-gray-500">
               Loading restaurant...
             </p>
@@ -56,7 +87,14 @@ function RestaurantCard() {
           <div className="space-y-8">
 
             {/* Restaurant Hero */}
-            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+            <motion.div
+              custom={0}
+              variants={sectionVariants}
+              initial="hidden"
+              animate="visible"
+              style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+              className="overflow-hidden border-2 border-[#1F2023] bg-white"
+            >
 
               <div className="relative h-52 sm:h-64 bg-gray-100">
                 <img
@@ -66,7 +104,7 @@ function RestaurantCard() {
                 />
 
                 {/* Rating */}
-                <div className="absolute bottom-3 left-3 flex items-center gap-1 rounded-lg bg-white/95 backdrop-blur px-3 py-1.5 text-sm font-semibold shadow-sm">
+                <div className="absolute bottom-3 left-3 flex items-center gap-1 border-2 border-[#1F2023] bg-white/95 backdrop-blur px-3 py-1.5 text-sm font-black">
                   <Star className="h-4 w-4 fill-[#FF5A36] text-[#FF5A36]" />
 
                   {restaurantData.rating == null
@@ -77,7 +115,7 @@ function RestaurantCard() {
 
               <div className="p-5 sm:p-6">
 
-                <h1 className="text-2xl font-bold text-[#1F2023]">
+                <h1 className="text-2xl font-black text-[#1F2023]">
                   {restaurantData.name}
                 </h1>
 
@@ -105,14 +143,14 @@ function RestaurantCard() {
 
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Food */}
-            <div>
+            <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible">
 
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-bold text-[#1F2023]">
+                  <h2 className="text-xl font-black text-[#1F2023]">
                     Menu
                   </h2>
 
@@ -121,37 +159,44 @@ function RestaurantCard() {
                   </p>
                 </div>
 
-                <span className="text-xs font-medium text-gray-400">
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-400">
                   {items.length} items
                 </span>
               </div>
 
               {items.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-300 bg-white py-12 text-center">
+                <div className="border-2 border-dashed border-[#1F2023] bg-white py-12 text-center">
                   <p className="text-sm text-gray-500">
                     This restaurant has no food items yet.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 place-items-center sm:place-items-stretch">
-                  {items.map((item) => (
-                    <FoodCard
-                      data={{
-                        ...item,
-                        restaurant_name:
-                          restaurantData.name,
-                      }}
+                  {items.map((item, index) => (
+                    <motion.div
                       key={item.id}
-                    />
+                      custom={index}
+                      variants={cardVariants}
+                      initial="hidden"
+                      animate="visible"
+                    >
+                      <FoodCard
+                        data={{
+                          ...item,
+                          restaurant_name:
+                            restaurantData.name,
+                        }}
+                      />
+                    </motion.div>
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
 
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 

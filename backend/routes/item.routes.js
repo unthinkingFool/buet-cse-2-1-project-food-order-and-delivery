@@ -7,6 +7,7 @@ import {
   editItem,
   deleteItem,
   toggleItemAvailability,
+  searchItems,
 } from "../controllers/item.controllers.js";
 
 import { upload } from "../middlewares/multer.js";
@@ -24,5 +25,7 @@ itemRouter.patch(
   isAuth,
   toggleItemAvailability,
 );
+
+itemRouter.get("/search-items",isAuth,searchItems);
 
 export default itemRouter;

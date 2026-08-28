@@ -21,6 +21,21 @@ export const isAuth = async (req, res, next) => {
     console.log("Decoded token:", decode);
 
     req.id = decode.id;
+    req.email=decode.email;
+    const suspendedUser = await pool.query(
+      `
+      SELECT id, email, role
+      FROM SUSPENED_EMAILS
+      WHERE email = $1
+      `,
+      [decode.email],
+    );
+
+    if (suspendedUser.rows.length !== 0) {
+      return res.status(403).json({
+        message: "This email has been suspended",
+      });
+    }
 
     const result = await pool.query(`SELECT role FROM CUSTOMER WHERE id = $1`, [
       decode.id,

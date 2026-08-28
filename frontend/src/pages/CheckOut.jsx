@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   MapPin,
@@ -44,7 +45,7 @@ function CheckoutPage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { cartItems, totalAmount } = useSelector((state) => state.user);
+  const { cartItems, totalAmount ,userData} = useSelector((state) => state.user);
 
   const { location, address } = useSelector((state) => state.map);
 
@@ -174,11 +175,11 @@ function CheckoutPage() {
     }
   };
   const getCurrentLocation = () => {
-    navigator.geolocation.getCurrentPosition((position) => {
-      console.log(position);
+    // navigator.geolocation.getCurrentPosition((position) => {
+    //   console.log(position);
 
-      const latitude = position.coords.latitude;
-      const longitude = position.coords.longitude;
+      const latitude = userData.latitude;
+      const longitude = userData.longitude;
 
       const newLocation = {
         lat: latitude,
@@ -188,7 +189,8 @@ function CheckoutPage() {
       dispatch(setLocation(newLocation));
 
       getAddressByLatLng(newLocation);
-    });
+    //});
+    
   };
   const getLatLngByAddress = async () => {
     try {
@@ -230,26 +232,46 @@ function CheckoutPage() {
     setaddressInput(address);
   }, [address]);
 
+  const fieldVariants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: 0.08 + i * 0.06, duration: 0.3, ease: "easeOut" },
+    }),
+  };
+
   // ==========================================
   // UI
   // ==========================================
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] px-4 sm:px-6 py-8">
+    <motion.div
+      initial={{ opacity: 0, x: -30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 30 }}
+      transition={{ duration: 0.35, ease: "easeInOut" }}
+      className="min-h-screen bg-[#FAFAF8] px-4 sm:px-6 py-10"
+    >
       <div className="max-w-5xl mx-auto">
         {/* Back */}
-        <div
+        <p
           onClick={() => navigate("/cart")}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#FF5A36] transition-colors cursor-pointer mb-6"
+          className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-gray-500 hover:text-[#FF5A36] transition-colors cursor-pointer mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
-        </div>
+        </p>
 
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold text-[#1F2023]">Checkout</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FF5A36] mb-2">
+              Almost there
+            </p>
+            <h1 className="text-3xl font-black text-[#1F2023]">Checkout</h1>
+          </div>
           {/* Total */}
-          <h2 className="text-sm font-semibold text-[#1F2023]">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-[#1F2023]">
             Total: <span className="text-[#FF5A36]">৳{totalAmount}</span>
           </h2>
         </div>
@@ -258,12 +280,19 @@ function CheckoutPage() {
           {/* left column — address, map, payment */}
           <div className="lg:col-span-2 space-y-5">
             {/* Delivery Address */}
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-              <label className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div
+              custom={0}
+              variants={fieldVariants}
+              initial="hidden"
+              animate="visible"
+              style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+              className="border-2 border-[#1F2023] bg-white p-5"
+            >
+              <label className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Delivery Address
               </label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   type="text"
                   value={addressInput}
@@ -271,14 +300,14 @@ function CheckoutPage() {
                     setaddressInput(e.target.value);
                   }}
                   placeholder="Select delivery location"
-                  className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                  className="w-full border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 />
               </div>
 
               <div className="flex flex-wrap gap-2 mt-3">
                 <button
                   onClick={getLatLngByAddress}
-                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-[#1F2023] transition hover:border-[#FF5A36] hover:text-[#FF5A36] cursor-pointer"
+                  className="flex items-center gap-1.5 border-2 border-gray-200 px-3.5 py-2 text-xs font-bold uppercase tracking-wide text-[#1F2023] transition hover:border-[#FF5A36] hover:text-[#FF5A36] cursor-pointer"
                 >
                   <Search className="h-3.5 w-3.5" />
                   Search
@@ -286,7 +315,7 @@ function CheckoutPage() {
 
                 <button
                   onClick={getCurrentLocation}
-                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3.5 py-2 text-xs font-semibold text-[#1F2023] transition hover:border-[#FF5A36] hover:text-[#FF5A36] cursor-pointer"
+                  className="flex items-center gap-1.5 border-2 border-gray-200 px-3.5 py-2 text-xs font-bold uppercase tracking-wide text-[#1F2023] transition hover:border-[#FF5A36] hover:text-[#FF5A36] cursor-pointer"
                 >
                   <LocateFixed className="h-3.5 w-3.5" />
                   Current Address
@@ -296,33 +325,40 @@ function CheckoutPage() {
               {/* Latitude / Longitude */}
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">
                     Latitude
                   </label>
                   <input
                     type="number"
                     value={location?.lat ?? ""}
                     readOnly
-                    className="w-full rounded-lg border border-gray-200 bg-[#FAFAF8] py-2 px-3 text-xs text-gray-500"
+                    className="w-full border-2 border-gray-200 bg-[#FAFAF8] py-2 px-3 text-xs text-gray-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">
                     Longitude
                   </label>
                   <input
                     type="number"
                     value={location?.lon ?? ""}
                     readOnly
-                    className="w-full rounded-lg border border-gray-200 bg-[#FAFAF8] py-2 px-3 text-xs text-gray-500"
+                    className="w-full border-2 border-gray-200 bg-[#FAFAF8] py-2 px-3 text-xs text-gray-500"
                   />
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* MAP */}
             {location?.lat !== null && location?.lon !== null && (
-              <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <motion.div
+                custom={1}
+                variants={fieldVariants}
+                initial="hidden"
+                animate="visible"
+                style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+                className="border-2 border-[#1F2023] bg-white overflow-hidden"
+              >
                 <MapContainer
                   center={[location.lat, location.lon]}
                   zoom={15}
@@ -348,37 +384,50 @@ function CheckoutPage() {
                     }}
                   />
                 </MapContainer>
-              </div>
+              </motion.div>
             )}
 
             {/* Payment Method */}
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5">
-              <label className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div
+              custom={2}
+              variants={fieldVariants}
+              initial="hidden"
+              animate="visible"
+              style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+              className="border-2 border-[#1F2023] bg-white p-5"
+            >
+              <label className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Payment Method
               </label>
               <div className="relative">
                 {payment_method === "cod" ? (
-                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  <Wallet className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 ) : (
-                  <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 )}
                 <select
                   value={payment_method}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                  className="w-full appearance-none border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 >
                   <option value="cod">Cash on Delivery</option>
                   <option value="online">
-                    Online Payment : Bkash, RazorPay
+                    Online Payment : Bkash 
                   </option>
                 </select>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* right column — order summary */}
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-5 lg:sticky lg:top-24 space-y-4">
-            <h1 className="text-base font-bold text-[#1F2023] flex items-center gap-2">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+            className="border-2 border-[#1F2023] bg-white p-5 lg:sticky lg:top-24 space-y-4"
+          >
+            <h1 className="text-sm font-bold uppercase tracking-wide text-[#1F2023] flex items-center gap-2">
               <ShoppingBag className="h-4 w-4 text-[#FF5A36]" />
               Order Summary
             </h1>
@@ -390,21 +439,21 @@ function CheckoutPage() {
                   className="flex items-start justify-between gap-2 text-sm"
                 >
                   <div className="min-w-0">
-                    <span className="font-medium text-[#1F2023] block truncate">
+                    <span className="font-bold text-[#1F2023] block truncate">
                       {item.name} X {item.quantity}
                     </span>
                     <p className="text-xs text-gray-400 truncate">
                       From: {item.restaurant}
                     </p>
                   </div>
-                  <span className="font-semibold text-[#1F2023] shrink-0">
+                  <span className="font-bold text-[#1F2023] shrink-0">
                     ৳{item.quantity * item.price}
                   </span>
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-gray-100 pt-3 space-y-1.5 text-sm">
+            <div className="border-t-2 border-gray-100 pt-3 space-y-1.5 text-sm">
               <div className="flex items-center justify-between text-gray-500">
                 <span>Total Purchase</span>
                 <span>৳{totalAmount}</span>
@@ -413,25 +462,28 @@ function CheckoutPage() {
                 <span>Delivery Fee</span>
                 <span>৳{deliveryFee}</span>
               </div>
-              <div className="flex items-center justify-between text-[#1F2023] font-bold text-base pt-1">
+              <div className="flex items-center justify-between text-[#1F2023] font-black text-base pt-1">
                 <span>Total</span>
                 <span>৳{amountWithDeliveryFee}</span>
               </div>
             </div>
 
             {/* Checkout */}
-            <button
+            <motion.button
+              whileHover={!loading ? { x: 2, y: 2, boxShadow: "2px 2px 0px 0px #1F2023" } : {}}
+              whileTap={!loading ? { x: 4, y: 4, boxShadow: "0px 0px 0px 0px #1F2023" } : {}}
               onClick={handleCheckout}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#FF5A36] py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e94e2c] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              style={{ boxShadow: "4px 4px 0px 0px #1F2023" }}
+              className="w-full flex items-center justify-center gap-2 bg-[#FF5A36] py-3.5 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {loading ? "Creating Order..." : "Place Order"}
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

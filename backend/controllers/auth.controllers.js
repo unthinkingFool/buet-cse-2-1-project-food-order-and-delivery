@@ -1,10 +1,30 @@
 import bcrypt from "bcrypt";
 import pool from "../config/db.js";
 import genToken from "../utils/token.js";
+import jwt from "jsonwebtoken";
 
 export const signup = async (req, res) => {
   try {
     const { name, email, password, contact_no, role } = req.body;
+
+    // ============================================================
+    // CHECK WHETHER EMAIL IS SUSPENDED
+    // ============================================================
+
+    const suspendedUser = await pool.query(
+      `
+      SELECT id, email, role
+      FROM SUSPENED_EMAILS
+      WHERE email = $1
+      `,
+      [email],
+    );
+
+    if (suspendedUser.rows.length !== 0) {
+      return res.status(403).json({
+        message: "This email has been suspended",
+      });
+    }
 
     // Check if customer already exists
     const existingUser = await pool.query(
@@ -45,9 +65,21 @@ export const signup = async (req, res) => {
     );
 
     const id = result.rows[0].id;
+    
 
     // Generate JWT
-    const token = await genToken(id);
+    //const token = await genToken(id);
+    const token = jwt.sign(
+      {
+        email: email,
+        role: role,
+        id:id,
+      },
+      process.env.JWT_SECRET_KEY,
+      {
+        expiresIn: "7d",
+      },
+    );
 
     // Store token in cookie
     res.cookie("token", token, {
@@ -74,6 +106,24 @@ export const signin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // ============================================================
+    // CHECK WHETHER EMAIL IS SUSPENDED
+    // ============================================================
+
+    const suspendedUser = await pool.query(
+      `
+      SELECT id, email, role
+      FROM SUSPENED_EMAILS
+      WHERE email = $1
+      `,
+      [email],
+    );
+
+    if (suspendedUser.rows.length !== 0) {
+      return res.status(403).json({
+        message: "This email has been suspended",
+      });
+    }
     // if the customer exists in the database
     const result = await pool.query(
       `SELECT id, name, email, hashed_password, contact_no, role
@@ -101,7 +151,20 @@ export const signin = async (req, res) => {
     }
 
     const id = result.rows[0].id;
-    const token = await genToken(id);
+    const role=result.rows[0].role;
+    
+    
+    const token = jwt.sign(
+      {
+        email: email,
+        role: role,
+        id:id,
+      },
+      process.env.JWT_SECRET_KEY,
+      {
+        expiresIn: "7d",
+      },
+    );
 
     res.cookie("token", token, {
       secure: false,
@@ -113,8 +176,8 @@ export const signin = async (req, res) => {
     return res.status(200).json({
       message: "sign in successfully",
       name: result.rows[0].name,
-      email:result.rows[0].email,
-      role:result.rows[0].role
+      email: result.rows[0].email,
+      role: result.rows[0].role,
     });
   } catch (error) {
     return res.status(500).json({

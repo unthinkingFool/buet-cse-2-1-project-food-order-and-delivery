@@ -290,63 +290,80 @@ export const getOrders = async (req, res) => {
     if (role === "customer") {
       const result = await pool.query(
         `
-        SELECT
-          -- FOOD ORDER
-          fo.id AS order_id,
-          fo.payment_method,
-          fo.delivery_address,
-          fo.latitude,
-          fo.longitude,
-          fo.total_amount,
-          fo.created_at AS order_created_at,
-          fo.updated_at AS order_updated_at,
+    SELECT
+      -- FOOD ORDER
+      fo.id AS order_id,
+      fo.payment_method,
+      fo.delivery_address,
+      fo.latitude,
+      fo.longitude,
+      fo.total_amount,
+      fo.created_at AS order_created_at,
+      fo.updated_at AS order_updated_at,
 
-          -- SHOP ORDER
-          so.id AS shop_order_id,
-          so.restaurant_id,
-          so.owner_id,
-          so.subtotal,
-          so.assigned_rider_id,
-          so.status,
-          so.created_at AS shop_order_created_at,
-          so.updated_at AS shop_order_updated_at,
+      -- SHOP ORDER
+      so.id AS shop_order_id,
+      so.restaurant_id,
+      so.owner_id,
+      so.subtotal,
+      so.assigned_rider_id,
+      so.status,
+      so.created_at AS shop_order_created_at,
+      so.updated_at AS shop_order_updated_at,
 
-          -- RESTAURANT
-          r.name AS restaurant_name,
-          r.image_link AS restaurant_image,
-          r.address AS restaurant_address,
-          r.city AS restaurant_city,
+      -- RESTAURANT
+      r.name AS restaurant_name,
+      r.image_link AS restaurant_image,
+      r.address AS restaurant_address,
+      r.city AS restaurant_city,
 
-          -- ORDER ITEM
-          oi.id AS order_item_id,
-          oi.item_id,
-          oi.price AS item_price,
-          oi.quantity,
+      -- ORDER ITEM
+      oi.id AS order_item_id,
+      oi.item_id,
+      oi.price AS item_price,
+      oi.quantity,
 
-          -- ITEM
-          i.name AS item_name,
-          i.image_link AS item_image,
-          i.category,
-          i.food_type
+      -- ITEM
+      i.name AS item_name,
+      i.image_link AS item_image,
+      i.category,
+      i.food_type
 
-        FROM FOOD_ORDER fo
+    FROM FOOD_ORDER fo
 
-        INNER JOIN SHOP_ORDER so
-          ON fo.id = so.order_id
+    INNER JOIN SHOP_ORDER so
+      ON fo.id = so.order_id
 
-        INNER JOIN RESTAURANT r
-          ON so.restaurant_id = r.id
+    INNER JOIN RESTAURANT r
+      ON so.restaurant_id = r.id
 
-        INNER JOIN ORDER_ITEM oi
-          ON so.id = oi.shop_order_id
+    INNER JOIN ORDER_ITEM oi
+      ON so.id = oi.shop_order_id
 
-        INNER JOIN ITEM i
-          ON oi.item_id = i.id
+    INNER JOIN ITEM i
+      ON oi.item_id = i.id
 
-        WHERE fo.customer_id = $1
+    WHERE fo.customer_id = $1
 
-        ORDER BY fo.created_at DESC, so.id, oi.id
-        `,
+      -- ======================================================
+      -- FOOD ORDER LEVEL CHECK
+      -- Only exclude the FOOD_ORDER when ALL shop orders
+      -- belonging to it are delivered.
+      -- ======================================================
+      AND EXISTS (
+        SELECT 1
+        FROM SHOP_ORDER so_check
+        WHERE so_check.order_id = fo.id
+          AND so_check.status != 'delivered'
+      )
+
+      -- ======================================================
+      -- Do not show delivered SHOP_ORDERs inside the result
+      -- ======================================================
+      AND so.status != 'delivered'
+
+    ORDER BY fo.created_at DESC, so.id, oi.id
+    `,
         [user_id],
       );
 
@@ -362,18 +379,13 @@ export const getOrders = async (req, res) => {
         if (!order) {
           order = {
             id: row.order_id,
-
             payment_method: row.payment_method,
-
             delivery_address: row.delivery_address,
             latitude: row.latitude,
             longitude: row.longitude,
-
             total_amount: row.total_amount,
-
             created_at: row.order_created_at,
             updated_at: row.order_updated_at,
-
             shopOrders: [],
           };
 
@@ -391,7 +403,6 @@ export const getOrders = async (req, res) => {
         if (!shopOrder) {
           shopOrder = {
             id: row.shop_order_id,
-
             restaurant_id: row.restaurant_id,
             owner_id: row.owner_id,
 
@@ -422,16 +433,12 @@ export const getOrders = async (req, res) => {
         shopOrder.items.push({
           id: row.order_item_id,
           item_id: row.item_id,
-
           name: row.item_name,
           image_link: row.item_image,
-
           category: row.category,
           food_type: row.food_type,
-
           price: row.item_price,
           quantity: row.quantity,
-
           item_total: Number(row.item_price) * Number(row.quantity),
         });
       }

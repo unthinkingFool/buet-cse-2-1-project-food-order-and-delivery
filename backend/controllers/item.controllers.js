@@ -299,3 +299,95 @@ export const toggleItemAvailability = async (req, res) => {
     });
   }
 };
+
+export const searchItems = async (req, res) => {
+  try {
+    // GET request -> data comes from req.query
+    const { query, city } = req.query;
+
+    if (!query || !city) {
+      return res.status(400).json({
+        success: false,
+        message: "Query and city are required",
+      });
+    }
+
+    const searchQuery = query.trim();
+
+    if (!searchQuery) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query cannot be empty",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        i.id AS item_id,
+        i.name AS item_name,
+        i.category,
+        i.food_type,
+        i.description AS item_description,
+        i.price,
+        i.discount_price,
+        i.image_link AS item_image,
+        i.rating AS item_rating,
+        i.isavailable,
+
+        r.id AS restaurant_id,
+        r.name AS restaurant_name,
+        r.image_link AS restaurant_image,
+        r.description AS restaurant_description,
+        r.address AS restaurant_address,
+        r.city AS restaurant_city,
+        r.latitude AS restaurant_latitude,
+        r.longitude AS restaurant_longitude,
+        r.rating AS restaurant_rating
+
+      FROM ITEM i
+
+      JOIN RESTAURANT r
+        ON i.restaurant_id = r.id
+
+      WHERE
+        LOWER(r.city) = LOWER($2)
+        AND r.is_approved = TRUE
+        AND r.status = 'open'
+        AND i.isavailable = TRUE
+        AND (
+          i.name ILIKE '%' || $1 || '%'
+          OR CAST(i.category AS TEXT) ILIKE '%' || $1 || '%'
+        )
+
+      ORDER BY
+        CASE
+          WHEN i.name ILIKE $1 THEN 1
+          WHEN i.name ILIKE $1 || '%' THEN 2
+          WHEN i.name ILIKE '%' || $1 || '%' THEN 3
+          ELSE 4
+        END,
+        i.rating DESC NULLS LAST,
+        i.name ASC
+      `,
+      [searchQuery, city.trim()]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Search results fetched successfully",
+      count: result.rows.length,
+      items: result.rows,
+    });
+
+  } catch (error) {
+    console.error("SEARCH ITEMS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error while searching items",
+      error: error.message,
+    });
+  }
+};
+

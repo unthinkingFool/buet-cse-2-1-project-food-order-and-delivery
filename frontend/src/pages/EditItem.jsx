@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import { motion } from "framer-motion";
 
 import { serverUrl } from "../App";
 import { updateItem } from "../redux/ownerSlice";
@@ -109,97 +110,131 @@ function EditItem() {
     }
   };
 
+  const fieldVariants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: 0.1 + i * 0.06, duration: 0.3, ease: "easeOut" },
+    }),
+  };
+
   if (!item) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8] px-6">
-        <div className="flex flex-col items-center text-center">
-          <div className="h-14 w-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="flex flex-col items-center text-center"
+        >
+          <div className="h-16 w-16 bg-gray-100 flex items-center justify-center mb-5">
             <SearchX className="h-7 w-7 text-gray-400" />
           </div>
-          <h1 className="text-lg font-bold text-[#1F2023]">Item not found</h1>
-          <button
+          <h1 className="text-xl font-black text-[#1F2023]">Item not found</h1>
+          <motion.button
+            whileHover={{ x: 2, y: 2, boxShadow: "2px 2px 0px 0px #1F2023" }}
+            whileTap={{ x: 4, y: 4, boxShadow: "0px 0px 0px 0px #1F2023" }}
             onClick={() => navigate("/")}
-            className="mt-5 flex items-center gap-1.5 rounded-lg bg-[#FF5A36] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e94e2c] cursor-pointer"
+            style={{ boxShadow: "4px 4px 0px 0px #1F2023" }}
+            className="mt-6 flex items-center gap-1.5 bg-[#FF5A36] px-5 py-2.5 text-sm font-bold uppercase tracking-wide text-white cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] px-4 sm:px-6 py-8">
+    <motion.div
+      initial={{ opacity: 0, x: -30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 30 }}
+      transition={{ duration: 0.35, ease: "easeInOut" }}
+      className="min-h-screen bg-[#FAFAF8] px-4 sm:px-6 py-10"
+    >
       <div className="max-w-lg mx-auto">
         {/* Back */}
-        <div
+        <p
           onClick={() => {
             navigate("/");
           }}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#FF5A36] transition-colors cursor-pointer mb-6"
+          className="inline-flex items-center gap-1.5 text-sm font-bold uppercase tracking-wide text-gray-500 hover:text-[#FF5A36] transition-colors cursor-pointer mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
-        </div>
+        </p>
 
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-6 sm:p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+          className="border-2 border-[#1F2023] bg-white p-6 sm:p-8"
+        >
           {/* Title */}
-          <div className="flex items-center gap-2 mb-6">
-            <div className="h-9 w-9 rounded-lg bg-[#FF5A36]/10 flex items-center justify-center">
-              <UtensilsCrossed className="h-4.5 w-4.5 text-[#FF5A36]" />
+          <div className="flex items-center gap-2.5 mb-8">
+            <div className="h-11 w-11 bg-[#FF5A36] flex items-center justify-center">
+              <UtensilsCrossed className="h-5 w-5 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-[#1F2023]">Edit Food</h1>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FF5A36]">
+                Menu
+              </p>
+              <h1 className="text-2xl font-black text-[#1F2023]">Edit Food</h1>
+            </div>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Name */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div custom={0} variants={fieldVariants} initial="hidden" animate="visible">
+              <label htmlFor="name" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Name Of Your Item:
               </label>
               <div className="relative">
-                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   id="name"
                   type="text"
                   onChange={(e) => setname(e.target.value)}
                   value={name}
-                  className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                  className="w-full border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 />
               </div>
-            </div>
+            </motion.div>
 
             {/* Description */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div custom={1} variants={fieldVariants} initial="hidden" animate="visible">
+              <label htmlFor="description" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Description Of Your Item:
               </label>
               <div className="relative">
-                <AlignLeft className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <AlignLeft className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   id="description"
                   type="text"
                   onChange={(e) => setdescription(e.target.value)}
                   value={description}
-                  className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                  className="w-full border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 />
               </div>
-            </div>
+            </motion.div>
 
             {/* Category */}
-            <div>
-              <label htmlFor="category" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div custom={2} variants={fieldVariants} initial="hidden" animate="visible">
+              <label htmlFor="category" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Category Of Your Item:
               </label>
               <div className="relative">
-                <Layers className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <Layers className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 <select
                   id="category"
                   onChange={(e) => setcategory(e.target.value)}
                   value={category}
-                  className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                  className="w-full appearance-none border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 >
                   <option value="">select</option>
                   {categories.map((cate, index) => (
@@ -209,20 +244,20 @@ function EditItem() {
                   ))}
                 </select>
               </div>
-            </div>
+            </motion.div>
 
             {/* Food type */}
-            <div>
-              <label htmlFor="food_type" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="visible">
+              <label htmlFor="food_type" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Type Of Your Item:
               </label>
               <div className="relative">
-                <Leaf className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <Leaf className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 <select
                   id="food_type"
                   onChange={(e) => setfood_type(e.target.value)}
                   value={food_type}
-                  className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                  className="w-full appearance-none border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 >
                   <option value="">select</option>
                   {types.map((type, index) => (
@@ -232,76 +267,83 @@ function EditItem() {
                   ))}
                 </select>
               </div>
-            </div>
+            </motion.div>
 
             {/* Price + Discount */}
-            <div className="grid grid-cols-2 gap-4">
+            <motion.div custom={4} variants={fieldVariants} initial="hidden" animate="visible" className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="price" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+                <label htmlFor="price" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                   Price:
                 </label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <DollarSign className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     id="price"
                     type="number"
                     onChange={(e) => setprice(e.target.value)}
                     value={price}
-                    className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                    className="w-full border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="discount_price" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+                <label htmlFor="discount_price" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                   Discount:
                 </label>
                 <div className="relative">
-                  <Percent className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Percent className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     id="discount_price"
                     type="number"
                     onChange={(e) => setdiscount_price(e.target.value)}
                     value={discount_price}
-                    className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-3 text-sm text-[#1F2023] shadow-sm outline-none transition focus:border-[#FF5A36] focus:ring-2 focus:ring-[#FF5A36]/20"
+                    className="w-full border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                   />
                 </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Image */}
-            <div>
-              <label htmlFor="image" className="block text-sm font-medium text-[#1F2023] mb-1.5">
+            <motion.div custom={5} variants={fieldVariants} initial="hidden" animate="visible">
+              <label htmlFor="image" className="block text-xs font-bold uppercase tracking-wide text-[#1F2023] mb-2">
                 Food Image:
               </label>
               <label
                 htmlFor="image"
-                className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-[#FAFAF8] py-6 cursor-pointer hover:border-[#FF5A36] transition-colors"
+                className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 bg-[#FAFAF8] py-6 cursor-pointer hover:border-[#FF5A36] transition-colors"
               >
                 {frontendimage ? (
-                  <img src={frontendimage} alt="Food" className="h-24 w-24 rounded-lg object-cover" />
+                  <img src={frontendimage} alt="Food" className="h-24 w-24 object-cover" />
                 ) : (
                   <>
                     <ImagePlus className="h-6 w-6 text-gray-400" />
-                    <span className="text-xs text-gray-400">Click to upload</span>
+                    <span className="text-xs font-bold uppercase tracking-wide text-gray-400">Click to upload</span>
                   </>
                 )}
               </label>
               <input id="image" type="file" onChange={handleImage} className="hidden" />
-            </div>
+            </motion.div>
 
-            <button
+            <motion.button
+              custom={6}
+              variants={fieldVariants}
+              initial="hidden"
+              animate="visible"
+              whileHover={!loading ? { x: 2, y: 2, boxShadow: "2px 2px 0px 0px #1F2023" } : {}}
+              whileTap={!loading ? { x: 4, y: 4, boxShadow: "0px 0px 0px 0px #1F2023" } : {}}
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#FF5A36] py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e94e2c] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
+              style={{ boxShadow: "4px 4px 0px 0px #1F2023" }}
+              className="w-full flex items-center justify-center gap-2 bg-[#FF5A36] py-3.5 text-sm font-bold uppercase tracking-wide text-white disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               Update Item
-            </button>
+            </motion.button>
           </form>
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

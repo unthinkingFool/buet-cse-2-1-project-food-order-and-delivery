@@ -2,11 +2,6 @@
 -- Food Delivery App — PostgreSQL Schema
 -- ============================================================
 
--- ============================================================
--- ENABLE POSTGIS
--- MongoDB 2dsphere equivalent for geographic coordinates
--- ============================================================
-
 CREATE EXTENSION IF NOT EXISTS postgis;
 
 
@@ -28,7 +23,7 @@ DROP TABLE IF EXISTS RESTAURANT CASCADE;
 DROP TABLE IF EXISTS PASSWORD_RESET CASCADE;
 DROP TABLE IF EXISTS NOTIFICATION CASCADE;
 DROP TABLE IF EXISTS ADMIN CASCADE;
-
+DROP TABLE IF EXISTS DELIVERY_OTP CASCADE;
 
 -- ============================================================
 -- DROP ENUM TYPES
@@ -111,16 +106,6 @@ CREATE TABLE ADMIN (
 
 -- ============================================================
 -- CUSTOMER
---
--- latitude / longitude:
---     Current GPS position
---
--- location:
---     PostGIS geography point
---     Equivalent concept to MongoDB 2dsphere location
---
--- Default location:
---     POINT(0 0)
 -- ============================================================
 
 CREATE TABLE CUSTOMER (
@@ -151,8 +136,6 @@ CREATE TABLE CUSTOMER (
 
 -- ============================================================
 -- SPATIAL INDEX
---
--- This makes nearby-location queries efficient.
 -- ============================================================
 
 CREATE INDEX idx_customer_location
@@ -223,7 +206,6 @@ CREATE TABLE ITEM (
 
 -- ============================================================
 -- LOCATION
--- CUSTOMER SAVED DELIVERY ADDRESSES
 -- ============================================================
 
 CREATE TABLE LOCATION (
@@ -293,11 +275,6 @@ CREATE TABLE SHOP_ORDER (
 
 -- ============================================================
 -- SHOP_ORDER_DELIVERY_ASSIGNMENT
---
--- One delivery assignment for a SHOP_ORDER.
---
--- assigned_to references CUSTOMER(id)
--- and application logic ensures role = 'rider'.
 -- ============================================================
 
 CREATE TABLE SHOP_ORDER_DELIVERY_ASSIGNMENT (
@@ -332,11 +309,6 @@ CREATE TABLE SHOP_ORDER_DELIVERY_ASSIGNMENT (
 
 -- ============================================================
 -- SHOP_ORDER_BROADCASTED_TO
---
--- Stores every rider who receives a delivery broadcast.
---
--- customer_id references CUSTOMER(id)
--- and application logic ensures role = rider.
 -- ============================================================
 
 CREATE TABLE SHOP_ORDER_BROADCASTED_TO (
@@ -412,12 +384,15 @@ CREATE TABLE PAYMENT (
 
     order_id          INTEGER NOT NULL
                       REFERENCES FOOD_ORDER(id),
+	shop_order_id     INTEGER NOT NULL
+                      REFERENCES SHOP_ORDER(id),
 
     payment_provider  payment_provider_enum,
 
     method            payment_method_enum,
 
     transaction_id    VARCHAR(255),
+	amount			  INTEGER,
 
     paid_at           TIMESTAMP NOT NULL
                       DEFAULT CURRENT_TIMESTAMP
@@ -429,6 +404,7 @@ CREATE TABLE PAYMENT (
 -- ============================================================
 
 CREATE TABLE PASSWORD_RESET (
+
     id              SERIAL PRIMARY KEY,
 
     email           VARCHAR(255) NOT NULL,
@@ -449,6 +425,44 @@ CREATE TABLE PASSWORD_RESET (
     )
 );
 
+-- ===========================================================
+-- DELIVERY VERIFICATION OTP
+-- ===========================================================
+
+CREATE TABLE DELIVERY_OTP (
+    id              SERIAL PRIMARY KEY,
+
+    order_id        INTEGER NOT NULL
+                    REFERENCES FOOD_ORDER(id)
+                    ON DELETE CASCADE,
+
+    shop_order_id   INTEGER NOT NULL
+                    REFERENCES SHOP_ORDER(id)
+                    ON DELETE CASCADE,
+
+    rider_id        INTEGER NOT NULL
+                    REFERENCES CUSTOMER(id),
+
+    customer_email  VARCHAR(255) NOT NULL,
+
+    otp_hash        VARCHAR(255) NOT NULL,
+
+    expires_at      TIMESTAMP NOT NULL,
+
+    verified        BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at      TIMESTAMP NOT NULL
+                    DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_delivery_otp_shop_order
+ON DELIVERY_OTP(shop_order_id);
+
+CREATE INDEX idx_delivery_otp_rider
+ON DELIVERY_OTP(rider_id);
+
+CREATE INDEX idx_delivery_otp_customer_email
+ON DELIVERY_OTP(customer_email);
 
 -- ============================================================
 -- NOTIFICATION
@@ -473,4 +487,30 @@ CREATE TABLE NOTIFICATION (
 
     created_at      TIMESTAMP NOT NULL
                     DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ==
+CREATE TABLE SUSPENED_EMAILS (
+    id          SERIAL PRIMARY KEY,
+    email       VARCHAR(255) NOT NULL,
+    role        customer_role_enum NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(email, role)
+);
+
+CREATE TABLE ISSUES (
+    id                SERIAL PRIMARY KEY,
+
+    sent_from_id      INTEGER NOT NULL
+                      REFERENCES CUSTOMER(id),
+
+    issue_against_id  INTEGER NOT NULL
+                      REFERENCES CUSTOMER(id),
+
+    issue_description VARCHAR(1000) NOT NULL,
+
+    created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (sent_from_id <> issue_against_id)
 );

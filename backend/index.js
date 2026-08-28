@@ -11,6 +11,8 @@ import itemRouter from "./routes/item.routes.js";
 import orderRouter from "./routes/order.routes.js";
 import riderRouter from "./routes/rider.routes.js";
 import deliveryRouter from "./routes/delivery.routes.js";
+import adminRouter from "./routes/admin.routes.js";
+import issueRouter from "./routes/issue.routes.js";
 
 const app = express();
 
@@ -31,6 +33,8 @@ app.use("/api/item",itemRouter)
 app.use("/api/order", orderRouter);
 app.use("/api/rider",riderRouter);
 app.use("/api/delivery",deliveryRouter);
+app.use("/api/admin",adminRouter);
+app.use("/api/issues",issueRouter);
 
 app.listen(port, () => {
   connectDB();

@@ -1,16 +1,27 @@
 import React from "react";
 import { MapPin, Package, Store,Truck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 
 function CustomerOrders({ orders = [] }) {
   const navigate=useNavigate()
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 14 },
+    visible: (i) => ({
+      opacity: 1,
+      y: 0,
+      transition: { delay: 0.06 * i, duration: 0.3, ease: "easeOut" },
+    }),
+  };
+
   if (!orders.length) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="text-center">
           <Package className="mx-auto mb-3 h-10 w-10 text-gray-300" />
 
-          <h2 className="text-lg font-semibold text-[#1F2023]">
+          <h2 className="text-lg font-black text-[#1F2023]">
             No orders yet
           </h2>
 
@@ -24,39 +35,44 @@ function CustomerOrders({ orders = [] }) {
 
   return (
     <div className="space-y-5">
-      {orders.map((order) => (
-        <div
+      {orders.map((order, index) => (
+        <motion.div
           key={order.id}
-          className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
+          custom={index}
+          variants={cardVariants}
+          initial="hidden"
+          animate="visible"
+          style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
+          className="overflow-hidden border-2 border-[#1F2023] bg-white"
         >
           {/* ORDER HEADER */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-gray-100 px-5 py-4">
             <div>
-              <p className="text-xs text-gray-400">Order #{order.id}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Order #{order.id}</p>
 
-              <p className="mt-1 text-sm font-medium text-[#1F2023]">
+              <p className="mt-1 text-sm font-bold text-[#1F2023]">
                 {new Date(order.created_at).toLocaleString()}
               </p>
             </div>
 
             <div className="text-right">
-              <p className="text-xs text-gray-400">Total</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Total</p>
 
-              <p className="text-base font-bold text-[#FF5A36]">
+              <p className="text-base font-black text-[#FF5A36]">
                 ৳{order.total_amount}
               </p>
             </div>
           </div>
 
           {/* DELIVERY INFORMATION */}
-          <div className="border-b border-gray-100 px-5 py-4">
+          <div className="border-b-2 border-gray-100 px-5 py-4">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-lg bg-[#FFF1EC] p-2">
+              <div className="mt-0.5 bg-[#FFF1EC] p-2">
                 <MapPin className="h-4 w-4 text-[#FF5A36]" />
               </div>
 
               <div>
-                <p className="text-xs font-medium text-gray-400">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
                   Delivery Address
                 </p>
 
@@ -72,7 +88,7 @@ function CustomerOrders({ orders = [] }) {
             {order.shopOrders?.map((shopOrder) => (
               <div
                 key={shopOrder.id}
-                className="rounded-xl border border-gray-100 bg-[#FAFAF8] p-4"
+                className="border-2 border-gray-100 bg-[#FAFAF8] p-4"
               >
                 {/* RESTAURANT */}
                 <div className="mb-4 flex items-center gap-3">
@@ -80,16 +96,16 @@ function CustomerOrders({ orders = [] }) {
                     <img
                       src={shopOrder.restaurant_image}
                       alt={shopOrder.restaurant_name}
-                      className="h-11 w-11 rounded-xl object-cover"
+                      className="h-11 w-11 object-cover"
                     />
                   ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white">
+                    <div className="flex h-11 w-11 items-center justify-center bg-white">
                       <Store className="h-5 w-5 text-[#FF5A36]" />
                     </div>
                   )}
 
                   <div>
-                    <h3 className="text-sm font-bold text-[#1F2023]">
+                    <h3 className="text-sm font-black text-[#1F2023]">
                       {shopOrder.restaurant_name}
                     </h3>
 
@@ -99,17 +115,17 @@ function CustomerOrders({ orders = [] }) {
                   </div>
 
                   <div className="ml-auto text-right">
-                    <p className="text-xs text-gray-400">Subtotal</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Subtotal</p>
 
-                    <p className="text-sm font-bold text-[#1F2023]">
+                    <p className="text-sm font-black text-[#1F2023]">
                       ৳{shopOrder.subtotal}
                     </p>
                   </div>
                 </div>
 
-                <div className="mb-4 flex items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3">
+                <div className="mb-4 flex items-center justify-between border-2 border-gray-100 bg-white px-4 py-3">
                   <div>
-                    <p className="text-xs text-gray-400">Order Status</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Order Status</p>
 
                     <p className="mt-1 text-sm font-bold capitalize text-[#1F2023]">
                       {shopOrder.status?.replaceAll("_", " ") || "Pending"}
@@ -131,14 +147,14 @@ function CustomerOrders({ orders = [] }) {
                           <img
                             src={item.image_link}
                             alt={item.name}
-                            className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                            className="h-12 w-12 shrink-0 object-cover"
                           />
                         ) : (
-                          <div className="h-12 w-12 shrink-0 rounded-lg bg-gray-200" />
+                          <div className="h-12 w-12 shrink-0 bg-gray-200" />
                         )}
 
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-[#1F2023]">
+                          <p className="truncate text-sm font-bold text-[#1F2023]">
                             {item.name}
                           </p>
 
@@ -148,7 +164,7 @@ function CustomerOrders({ orders = [] }) {
                         </div>
                       </div>
 
-                      <p className="shrink-0 text-sm font-semibold text-[#1F2023]">
+                      <p className="shrink-0 text-sm font-bold text-[#1F2023]">
                         ৳{item.item_total}
                       </p>
                     </div>
@@ -157,7 +173,7 @@ function CustomerOrders({ orders = [] }) {
                 <div className="mt-3">
                   <button onClick={()=>{navigate(`/track-shop-order/${shopOrder.id}`)}}
                     disabled={!shopOrder.assigned_rider_id || shopOrder.status=='delivered'}
-                    className={`w-full flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100 ${
+                    className={`w-full flex items-center justify-center gap-1.5 border-2 py-2 text-xs font-bold uppercase tracking-wide transition active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100 ${
                       (shopOrder.assigned_rider_id && shopOrder.status!='delivered')
                         ? "border-[#FF5A36] text-[#FF5A36] hover:bg-[#FF5A36] hover:text-white"
                         : "border-gray-200 text-gray-400 bg-gray-50"
@@ -172,16 +188,16 @@ function CustomerOrders({ orders = [] }) {
           </div>
 
           {/* PAYMENT */}
-          <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
-            <span className="text-xs text-gray-400">Payment</span>
+          <div className="flex items-center justify-between border-t-2 border-gray-100 px-5 py-4">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Payment</span>
 
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600">
+            <span className="bg-gray-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-gray-600">
               {order.payment_method === "cod"
                 ? "Cash on Delivery"
                 : "Online Payment"}
             </span>
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );

@@ -12,7 +12,7 @@ import useGetRestaurantByCity from "./hooks/useGetRestaurantByCity";
 import useGetItemsByCity from "./hooks/useGetItemsByCity";
 import useGetMyOrders from "./hooks/useGetMyOrders";
 
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 
 import Home from "./pages/Home";
 import CreateEditRestaurant from "./pages/CreateEditRestaurant";
@@ -43,10 +43,14 @@ import AdminIssues from "./pages/admin/AdminIssues";
 import AdminLayout from "./components/admin/AdminLayout";
 
 import useGetCurrentAdmin from "./hooks/admin/useGetCurrentAdmin";
+import { useEffect } from "react";
+import { io } from "socket.io-client";
+import { setSocket } from "./redux/userSlice";
 
 export const serverUrl = "http://localhost:3000";
 
 function App() {
+  const dispatch = useDispatch();
   const location = useLocation();
 
   useGetCurrentUser();
@@ -59,143 +63,187 @@ function App() {
   // Only authentication/session check globally
   useGetCurrentAdmin();
 
-  const { userData, cartItems } = useSelector((state) => state.user);
+  const { userData, cartItems, socket } = useSelector((state) => state.user);
 
+  useEffect(() => {
+    const socketInstance = io(serverUrl, {
+      withCredentials: true,
+    });
+
+    dispatch(setSocket(socketInstance));
+
+    socketInstance.on("connect", () => {
+      console.log("Socket connected:", socketInstance.id);
+    });
+
+    return () => {
+      socketInstance.disconnect();
+    };
+  }, [dispatch]);
+
+  
+  useEffect(() => {
+    if (!socket || !userData) {
+      return;
+    }
+
+    const sendIdentity = () => {
+      socket.emit("identity", {
+        userID: userData.id,
+      });
+
+      console.log(`Identity sent for user: ${userData.id}`);
+    };
+
+    if (socket.connected) {
+      sendIdentity();
+    }
+
+    socket.on("connect", sendIdentity);
+
+    return () => {
+      socket.off("connect", sendIdentity);
+    };
+  }, [socket, userData]);
   const { adminData } = useSelector((state) => state.admin);
 
   return (
     <AnimatePresence mode="wait">
-    <Routes location={location} key={location.pathname}>
-      {/* ====================================================== */}
-      {/* USER ROUTES */}
-      {/* ====================================================== */}
+      <Routes location={location} key={location.pathname}>
+        {/* ====================================================== */}
+        {/* USER ROUTES */}
+        {/* ====================================================== */}
 
-      <Route
-        path="/"
-        element={userData ? <Home /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/"
+          element={userData ? <Home /> : <Navigate to="/signin" />}
+        />
 
-      <Route
-        path="/signup"
-        element={!userData ? <SignUp /> : <Navigate to="/" />}
-      />
+        <Route
+          path="/signup"
+          element={!userData ? <SignUp /> : <Navigate to="/" />}
+        />
 
-      <Route
-        path="/signin"
-        element={!userData ? <SignIn /> : <Navigate to="/" />}
-      />
+        <Route
+          path="/signin"
+          element={!userData ? <SignIn /> : <Navigate to="/" />}
+        />
 
-      <Route
-        path="/forgot-password"
-        element={!userData ? <ForgotPassword /> : <Navigate to="/" />}
-      />
+        <Route
+          path="/forgot-password"
+          element={!userData ? <ForgotPassword /> : <Navigate to="/" />}
+        />
 
-      <Route
-        path="/create-edit-restaurant"
-        element={
-          userData ? <CreateEditRestaurant /> : <Navigate to="/signin" />
-        }
-      />
+        <Route
+          path="/create-edit-restaurant"
+          element={
+            userData ? <CreateEditRestaurant /> : <Navigate to="/signin" />
+          }
+        />
 
-      <Route
-        path="/add-food"
-        element={userData ? <AddItem /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/add-food"
+          element={userData ? <AddItem /> : <Navigate to="/signin" />}
+        />
 
-      <Route
-        path="/edit-item/:itemId"
-        element={userData ? <EditItem /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/edit-item/:itemId"
+          element={userData ? <EditItem /> : <Navigate to="/signin" />}
+        />
 
-      <Route
-        path="/cart"
-        element={userData ? <CartPage /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/cart"
+          element={userData ? <CartPage /> : <Navigate to="/signin" />}
+        />
 
-      <Route
-        path="/checkout"
-        element={
-          userData && cartItems?.length > 0 ? (
-            <CheckOut />
-          ) : (
-            <Navigate to={userData ? "/cart" : "/signin"} replace />
-          )
-        }
-      />
+        <Route
+          path="/checkout"
+          element={
+            userData && cartItems?.length > 0 ? (
+              <CheckOut />
+            ) : (
+              <Navigate to={userData ? "/cart" : "/signin"} replace />
+            )
+          }
+        />
 
-      <Route
-        path="/order-placed"
-        element={userData ? <OrderPlaced /> : <Navigate to="/signin" replace />}
-      />
+        <Route
+          path="/order-placed"
+          element={
+            userData ? <OrderPlaced /> : <Navigate to="/signin" replace />
+          }
+        />
 
-      <Route
-        path="/my-orders"
-        element={userData ? <MyOrders /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/my-orders"
+          element={userData ? <MyOrders /> : <Navigate to="/signin" />}
+        />
 
-      <Route
-        path="/delivered-orders"
-        element={
-          userData ? <RiderDeliveredOrders /> : <Navigate to="/signin" />
-        }
-      />
+        <Route
+          path="/delivered-orders"
+          element={
+            userData ? <RiderDeliveredOrders /> : <Navigate to="/signin" />
+          }
+        />
 
-      <Route
-        path="/owner-delivered-orders"
-        element={
-          userData ? <OwnerDeliveredOrders /> : <Navigate to="/signin" />
-        }
-      />
+        <Route
+          path="/owner-delivered-orders"
+          element={
+            userData ? <OwnerDeliveredOrders /> : <Navigate to="/signin" />
+          }
+        />
 
-      <Route
-        path="/user-received-orders"
-        element={
-          userData ? <CustomerReceivedOrders /> : <Navigate to="/signin" />
-        }
-      />
+        <Route
+          path="/user-received-orders"
+          element={
+            userData ? <CustomerReceivedOrders /> : <Navigate to="/signin" />
+          }
+        />
 
-      <Route
-        path="/restaurant/:restaurantId"
-        element={userData ? <RestaurantCard /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/restaurant/:restaurantId"
+          element={userData ? <RestaurantCard /> : <Navigate to="/signin" />}
+        />
 
-      <Route
-        path="/track-shop-order/:shop_order_id"
-        element={userData ? <TrackOrder /> : <Navigate to="/signin" />}
-      />
+        <Route
+          path="/track-shop-order/:shop_order_id"
+          element={userData ? <TrackOrder /> : <Navigate to="/signin" />}
+        />
 
-      {/* ====================================================== */}
-      {/* ADMIN LOGIN */}
-      {/* ====================================================== */}
+        {/* ====================================================== */}
+        {/* ADMIN LOGIN */}
+        {/* ====================================================== */}
 
-      <Route
-        path="/admin/login"
-        element={adminData ? <Navigate to="/admin" replace /> : <AdminLogin />}
-      />
+        <Route
+          path="/admin/login"
+          element={
+            adminData ? <Navigate to="/admin" replace /> : <AdminLogin />
+          }
+        />
 
-      {/* ====================================================== */}
-      {/* ADMIN PANEL */}
-      {/* ====================================================== */}
+        {/* ====================================================== */}
+        {/* ADMIN PANEL */}
+        {/* ====================================================== */}
 
-      <Route
-        path="/admin"
-        element={
-          adminData ? <AdminLayout /> : <Navigate to="/admin/login" replace />
-        }
-      >
-        <Route index element={<AdminDashboard />} />
+        <Route
+          path="/admin"
+          element={
+            adminData ? <AdminLayout /> : <Navigate to="/admin/login" replace />
+          }
+        >
+          <Route index element={<AdminDashboard />} />
 
-        <Route path="restaurants" element={<AdminRestaurants />} />
+          <Route path="restaurants" element={<AdminRestaurants />} />
 
-        <Route path="customers" element={<AdminCustomers />} />
+          <Route path="customers" element={<AdminCustomers />} />
 
-        <Route path="riders" element={<AdminRiders />} />
+          <Route path="riders" element={<AdminRiders />} />
 
-        <Route path="orders" element={<AdminOrders />} />
+          <Route path="orders" element={<AdminOrders />} />
 
-        <Route path="issues" element={<AdminIssues />} />
-      </Route>
-    </Routes>
+          <Route path="issues" element={<AdminIssues />} />
+        </Route>
+      </Routes>
     </AnimatePresence>
   );
 }

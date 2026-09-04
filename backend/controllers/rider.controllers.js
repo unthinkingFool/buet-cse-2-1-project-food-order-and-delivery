@@ -335,18 +335,18 @@ export const acceptShopOrder = async (req, res) => {
     const shopOrderResult = await client.query(
       `
       SELECT
-        id,
-        order_id,
-        restaurant_id,
-        owner_id,
-        subtotal,
-        assigned_rider_id,
-        status
-
-      FROM SHOP_ORDER
-
-      WHERE id = $1
-
+        so.id,
+        so.order_id,
+        so.restaurant_id,
+        so.owner_id,
+        so.subtotal,
+        so.assigned_rider_id,
+        so.status,
+        fo.customer_id
+      FROM SHOP_ORDER so
+      JOIN FOOD_ORDER fo
+        ON fo.id = so.order_id
+      WHERE so.id = $1
       FOR UPDATE
       `,
       [shop_order_id],
@@ -444,12 +444,23 @@ export const acceptShopOrder = async (req, res) => {
     // ============================================================
 
     await client.query("COMMIT");
+    const io = req.app.get("io");
+
+    io.to(`user:${shopOrder.customer_id}`).emit("order_rider_assigned", {
+      order_id: shopOrder.order_id,
+      shop_order_id: shopOrder.id,
+      rider_id: rider_id,
+    });
+
+    io.to(`user:${shopOrder.owner_id}`).emit("order_rider_assigned", {
+      order_id: shopOrder.order_id,
+      shop_order_id: shopOrder.id,
+      rider_id: rider_id,
+    });
 
     return res.status(200).json({
       message: "Shop order accepted successfully",
-
       shopOrder: updatedShopOrderResult.rows[0],
-
       deliveryAssignment: updatedAssignmentResult.rows[0],
     });
   } catch (error) {
@@ -668,4 +679,3 @@ export const getDeliveredOrders = async (req, res) => {
     });
   }
 };
-

@@ -48,7 +48,7 @@ export const sendDeliveryOTP = async (req, res) => {
       WHERE id = $1
         AND role = 'rider'
       `,
-      [rider_id]
+      [rider_id],
     );
 
     if (riderResult.rows.length === 0) {
@@ -85,7 +85,7 @@ export const sendDeliveryOTP = async (req, res) => {
 
       WHERE so.id = $1
       `,
-      [shop_order_id]
+      [shop_order_id],
     );
 
     if (orderResult.rows.length === 0) {
@@ -146,7 +146,7 @@ export const sendDeliveryOTP = async (req, res) => {
       DELETE FROM DELIVERY_OTP
       WHERE shop_order_id = $1
       `,
-      [shop_order_id]
+      [shop_order_id],
     );
 
     // ========================================================
@@ -173,7 +173,7 @@ export const sendDeliveryOTP = async (req, res) => {
         order.customer_email,
         otpHash,
         expiresAt,
-      ]
+      ],
     );
 
     // ========================================================
@@ -212,7 +212,6 @@ KhaiDai
       success: true,
       message: "Delivery OTP has been sent to the customer email",
     });
-
   } catch (error) {
     console.error("SEND DELIVERY OTP ERROR:", error);
 
@@ -222,7 +221,6 @@ KhaiDai
     });
   }
 };
-
 
 // ============================================================
 // VERIFY DELIVERY OTP
@@ -299,7 +297,7 @@ export const verifyDeliveryOTP = async (req, res) => {
       WHERE id = $1
       FOR UPDATE
       `,
-      [shop_order_id]
+      [shop_order_id],
     );
 
     if (shopOrderResult.rows.length === 0) {
@@ -363,7 +361,7 @@ export const verifyDeliveryOTP = async (req, res) => {
       LIMIT 1
       FOR UPDATE
       `,
-      [shop_order_id, rider_id]
+      [shop_order_id, rider_id],
     );
 
     if (otpResult.rows.length === 0) {
@@ -407,10 +405,7 @@ export const verifyDeliveryOTP = async (req, res) => {
     // COMPARE OTP
     // ========================================================
 
-    const isValidOTP = await bcrypt.compare(
-      otp,
-      deliveryOTP.otp_hash
-    );
+    const isValidOTP = await bcrypt.compare(otp, deliveryOTP.otp_hash);
 
     if (!isValidOTP) {
       await client.query("ROLLBACK");
@@ -431,7 +426,7 @@ export const verifyDeliveryOTP = async (req, res) => {
       SET verified = TRUE
       WHERE id = $1
       `,
-      [deliveryOTP.id]
+      [deliveryOTP.id],
     );
 
     // ========================================================
@@ -452,7 +447,7 @@ export const verifyDeliveryOTP = async (req, res) => {
           status,
           updated_at
       `,
-      [shop_order_id]
+      [shop_order_id],
     );
 
     // ========================================================
@@ -473,14 +468,79 @@ export const verifyDeliveryOTP = async (req, res) => {
           assignment_status,
           accepted_at
       `,
-      [shop_order_id, rider_id]
+      [shop_order_id, rider_id],
     );
 
     // ========================================================
-    // COMMIT
+    // GET UPDATED SHOP ORDER
+    // ========================================================
+
+    const deliveredShopOrderResult = await client.query(
+      `
+  SELECT
+    so.id,
+    so.order_id,
+    so.restaurant_id,
+    so.owner_id,
+    so.subtotal,
+    so.assigned_rider_id,
+    so.status,
+    so.updated_at,
+    fo.customer_id
+  FROM SHOP_ORDER so
+  JOIN FOOD_ORDER fo
+    ON fo.id = so.order_id
+  WHERE so.id = $1
+  `,
+      [shop_order_id],
+    );
+
+    if (deliveredShopOrderResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+
+      return res.status(404).json({
+        success: false,
+        message: "Updated shop order not found",
+      });
+    }
+
+    const deliveredShopOrder = deliveredShopOrderResult.rows[0];
+
+    // ========================================================
+    // COMMIT TRANSACTION
     // ========================================================
 
     await client.query("COMMIT");
+
+    // ========================================================
+    // SOCKET.IO
+    // ========================================================
+
+    const io = req.app.get("io");
+
+    if (io) {
+      // Notify CUSTOMER
+      io.to(`user:${deliveredShopOrder.customer_id}`).emit(
+        "order_status_changed",
+        {
+          order_id: deliveredShopOrder.order_id,
+          shop_order_id: deliveredShopOrder.id,
+          status: deliveredShopOrder.status,
+          updated_at: deliveredShopOrder.updated_at,
+        },
+      );
+
+      // Notify OWNER
+      io.to(`user:${deliveredShopOrder.owner_id}`).emit(
+        "order_status_changed",
+        {
+          order_id: deliveredShopOrder.order_id,
+          shop_order_id: deliveredShopOrder.id,
+          status: deliveredShopOrder.status,
+          updated_at: deliveredShopOrder.updated_at,
+        },
+      );
+    }
 
     // ========================================================
     // SUCCESS
@@ -492,10 +552,8 @@ export const verifyDeliveryOTP = async (req, res) => {
 
       shopOrder: updatedOrderResult.rows[0],
 
-      deliveryAssignment:
-        updatedAssignmentResult.rows[0] || null,
+      deliveryAssignment: updatedAssignmentResult.rows[0] || null,
     });
-
   } catch (error) {
     await client.query("ROLLBACK");
 
@@ -505,7 +563,6 @@ export const verifyDeliveryOTP = async (req, res) => {
       success: false,
       message: "Error while verifying delivery OTP",
     });
-
   } finally {
     client.release();
   }

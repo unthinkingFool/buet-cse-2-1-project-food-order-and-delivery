@@ -125,7 +125,8 @@ CREATE TABLE CUSTOMER (
                         ST_MakePoint(0, 0),
                         4326
                     )::geography,
-
+	socket_id       VARCHAR(255),
+	isonline 		BOOLEAN NOT NULL DEFAULT FALSE;
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -379,23 +380,39 @@ CREATE TABLE REVIEW (
 -- PAYMENT
 -- ============================================================
 
+
 CREATE TABLE PAYMENT (
     id                SERIAL PRIMARY KEY,
 
-    order_id          INTEGER NOT NULL
-                      REFERENCES FOOD_ORDER(id),
-	shop_order_id     INTEGER NOT NULL
-                      REFERENCES SHOP_ORDER(id),
+    order_id          INTEGER NOT NULL UNIQUE
+                      REFERENCES FOOD_ORDER(id)
+                      ON DELETE CASCADE,
 
     payment_provider  payment_provider_enum,
 
-    method            payment_method_enum,
+    method            payment_method_enum NOT NULL,
 
-    transaction_id    VARCHAR(255),
-	amount			  INTEGER,
+    transaction_id    VARCHAR(255) UNIQUE,
 
-    paid_at           TIMESTAMP NOT NULL
-                      DEFAULT CURRENT_TIMESTAMP
+    amount            NUMERIC(10,2) NOT NULL,
+
+    status            VARCHAR(20) NOT NULL DEFAULT 'pending',
+
+    val_id            VARCHAR(255),
+
+    bank_tran_id      VARCHAR(255),
+
+    paid_at           TIMESTAMP,
+
+    created_at        TIMESTAMP NOT NULL
+                      DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at        TIMESTAMP NOT NULL
+                      DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (
+        status IN ('pending', 'paid', 'failed', 'cancelled')
+    )
 );
 
 

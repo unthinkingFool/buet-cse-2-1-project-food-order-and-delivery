@@ -8,6 +8,7 @@ import {
   deleteItem,
   toggleItemAvailability,
   searchItems,
+  getItemTotalSold,
 } from "../controllers/item.controllers.js";
 
 import { upload } from "../middlewares/multer.js";
@@ -27,5 +28,11 @@ itemRouter.patch(
 );
 
 itemRouter.get("/search-items",isAuth,searchItems);
+
+itemRouter.get(
+  "/total-sold/:itemId",
+  isAuth,
+  getItemTotalSold
+);
 
 export default itemRouter;

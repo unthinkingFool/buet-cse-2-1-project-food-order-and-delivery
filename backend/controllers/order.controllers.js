@@ -130,11 +130,15 @@ export const createOrder = async (req, res) => {
     // CALCULATE TOTAL AMOUNT
     // ==========================================
 
-    let total_amount = 0;
+    let subtotal = 0;
 
     for (const item of verifiedItems) {
-      total_amount += item.price * item.quantity;
+      subtotal += item.price * item.quantity;
     }
+
+    const delivery_fee = subtotal > 300 ? 0 : 35;
+
+    const total_amount = subtotal + delivery_fee;
 
     // ==========================================
     // CREATE FOOD_ORDER
@@ -252,6 +256,15 @@ export const createOrder = async (req, res) => {
     // ==========================================
 
     await client.query("COMMIT");
+
+    const io = req.app.get("io");
+
+    shopOrders.forEach((shopOrder) => {
+      io.to(`user:${shopOrder.owner_id}`).emit("new_shop_order", {
+        order_id: foodOrder.id,
+        shop_order_id: shopOrder.id,
+      });
+    });
 
     // ==========================================
     // SUCCESS RESPONSE
@@ -1151,6 +1164,28 @@ export const updateOrderStatus = async (req, res) => {
     // ============================================================
 
     await client.query("COMMIT");
+
+    const io = req.app.get("io");
+
+    // Notify nearby riders that a new delivery offer is available
+    if (
+      updatedShopOrder.status === "out_for_delivery" &&
+      broadcastedRiders.length > 0
+    ) {
+      broadcastedRiders.forEach((rider) => {
+        io.to(`user:${rider.rider_id}`).emit("new_delivery_offer", {
+          order_id: shopOrder.order_id,
+          shop_order_id: shopOrder.id,
+        });
+      });
+    }
+
+    // Notify customer about status changes
+    io.to(`user:${shopOrder.customer_id}`).emit("order_status_changed", {
+      order_id: shopOrder.order_id,
+      shop_order_id: shopOrder.id,
+      status: updatedShopOrder.status,
+    });
 
     return res.status(200).json({
       message:

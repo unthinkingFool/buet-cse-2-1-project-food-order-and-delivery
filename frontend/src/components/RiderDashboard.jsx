@@ -40,7 +40,7 @@ function RiderDashboard() {
     (state) => state.rider,
   );
 
-  const { userData, city } = useSelector((state) => state.user);
+  const { userData, city, socket } = useSelector((state) => state.user);
 
   // ============================================================
   // LOCAL STATE
@@ -106,8 +106,20 @@ function RiderDashboard() {
       }
     };
 
+    // Initial fetch
     getBroadcastedShopOrders();
-  }, []);
+
+    // Real-time new delivery offer
+    if (socket) {
+      socket.on("new_delivery_offer", getBroadcastedShopOrders);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off("new_delivery_offer", getBroadcastedShopOrders);
+      }
+    };
+  }, [socket]);
 
   // ============================================================
   // SEND DELIVERY OTP

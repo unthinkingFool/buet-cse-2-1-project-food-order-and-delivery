@@ -26,7 +26,7 @@ function Nav() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { userData, city, cartItems } = useSelector((state) => state.user);
+  const { userData, city, cartItems, myOrders } = useSelector((state) => state.user);
 
   const { restaurantData } = useSelector((state) => state.owner);
 
@@ -254,7 +254,7 @@ function Nav() {
               <Bell className="h-5 w-5 text-[#1F2023]" />
 
               <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 bg-[#FF5A36] text-white text-[10px] font-bold flex items-center justify-center">
-                0
+                {myOrders.length}
               </span>
             </div>
           )}

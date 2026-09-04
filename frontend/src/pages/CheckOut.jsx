@@ -45,7 +45,9 @@ function CheckoutPage() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  const { cartItems, totalAmount ,userData} = useSelector((state) => state.user);
+  const { cartItems, totalAmount, userData } = useSelector(
+    (state) => state.user,
+  );
 
   const { location, address } = useSelector((state) => state.map);
 
@@ -117,13 +119,9 @@ function CheckoutPage() {
         `${serverUrl}/api/order/create`,
         {
           payment_method,
-
           delivery_address: address,
-
           latitude: location.lat,
-
           longitude: location.lon,
-
           cartItems: orderItems,
         },
         {
@@ -131,13 +129,54 @@ function CheckoutPage() {
         },
       );
 
-      // Order successfully created
-      dispatch(addMyOrder(result.data))
+      const createdOrder = result.data.order;
 
-      navigate("/order-placed", {
-        replace: true,
-        state: { orderPlaced: true },
-      });
+      // ============================================================
+      // COD
+      // ============================================================
+
+      if (payment_method === "cod") {
+        dispatch(addMyOrder(result.data));
+
+        dispatch(clearCart());
+
+        navigate("/order-placed", {
+          replace: true,
+          state: {
+            orderPlaced: true,
+            order: createdOrder,
+          },
+        });
+
+        return;
+      }
+
+      // ============================================================
+      // ONLINE PAYMENT
+      // ============================================================
+
+      if (payment_method === "online") {
+        const paymentResult = await axios.post(
+          `${serverUrl}/api/payment/initiate`,
+          {
+            order_id: createdOrder.id,
+          },
+          {
+            withCredentials: true,
+          },
+        );
+
+        const gatewayUrl = paymentResult.data.gateway_url;
+
+        if (!gatewayUrl) {
+          throw new Error("SSLCOMMERZ payment gateway URL was not returned");
+        }
+
+        // Redirect customer to SSLCOMMERZ
+        window.location.href = gatewayUrl;
+
+        return;
+      }
     } catch (error) {
       console.error("Error while creating order:", error);
 
@@ -178,19 +217,18 @@ function CheckoutPage() {
     // navigator.geolocation.getCurrentPosition((position) => {
     //   console.log(position);
 
-      const latitude = userData.latitude;
-      const longitude = userData.longitude;
+    const latitude = userData.latitude;
+    const longitude = userData.longitude;
 
-      const newLocation = {
-        lat: latitude,
-        lon: longitude,
-      };
+    const newLocation = {
+      lat: latitude,
+      lon: longitude,
+    };
 
-      dispatch(setLocation(newLocation));
+    dispatch(setLocation(newLocation));
 
-      getAddressByLatLng(newLocation);
+    getAddressByLatLng(newLocation);
     //});
-    
   };
   const getLatLngByAddress = async () => {
     try {
@@ -411,9 +449,7 @@ function CheckoutPage() {
                   className="w-full appearance-none border-2 border-gray-200 bg-white py-3 pl-10 pr-3 text-sm font-medium text-[#1F2023] outline-none transition focus:border-[#FF5A36]"
                 >
                   <option value="cod">Cash on Delivery</option>
-                  <option value="online">
-                    Online Payment : Bkash 
-                  </option>
+                  <option value="online">Online Payment : Bkash</option>
                 </select>
               </div>
             </motion.div>
@@ -470,8 +506,16 @@ function CheckoutPage() {
 
             {/* Checkout */}
             <motion.button
-              whileHover={!loading ? { x: 2, y: 2, boxShadow: "2px 2px 0px 0px #1F2023" } : {}}
-              whileTap={!loading ? { x: 4, y: 4, boxShadow: "0px 0px 0px 0px #1F2023" } : {}}
+              whileHover={
+                !loading
+                  ? { x: 2, y: 2, boxShadow: "2px 2px 0px 0px #1F2023" }
+                  : {}
+              }
+              whileTap={
+                !loading
+                  ? { x: 4, y: 4, boxShadow: "0px 0px 0px 0px #1F2023" }
+                  : {}
+              }
               onClick={handleCheckout}
               disabled={loading}
               style={{ boxShadow: "4px 4px 0px 0px #1F2023" }}

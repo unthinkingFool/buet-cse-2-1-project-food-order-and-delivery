@@ -1,13 +1,16 @@
 import React, { useEffect } from "react";
 import axios from "axios";
 import { serverUrl } from "../App";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { setMyOrders } from "../redux/userSlice";
 
 function useGetMyOrders() {
   const dispatch = useDispatch();
+  const { socket, userData } = useSelector((state) => state.user);
 
   useEffect(() => {
+    if (!userData) return;
+
     const fetchOrders = async () => {
       try {
         const result = await axios.get(
@@ -28,8 +31,24 @@ function useGetMyOrders() {
       }
     };
 
+    // Initial fetch
     fetchOrders();
-  }, [dispatch]);
+
+    // Listen for new orders
+    if (socket) {
+      socket.on("new_shop_order", fetchOrders);
+      socket.on("order_status_changed", fetchOrders);
+      socket.on("order_rider_assigned", fetchOrders);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off("new_shop_order", fetchOrders);
+        socket.off("order_status_changed", fetchOrders);
+        socket.off("order_rider_assigned", fetchOrders);
+      }
+    };
+  }, [dispatch, socket, userData]);
 }
 
 export default useGetMyOrders;

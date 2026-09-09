@@ -16,7 +16,7 @@ export const forgotPassword = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT email FROM CUSTOMER WHERE email = $1`,
+      `SELECT email, role FROM CUSTOMER WHERE email = $1`,
       [email],
     );
 
@@ -43,15 +43,16 @@ export const forgotPassword = async (req, res) => {
 
     await pool.query(
       `
-            INSERT INTO PASSWORD_RESET
-            (
-                email,
-                otp_hash,
-                expires_at
-            )
-            VALUES ($1, $2, $3)
-            `,
-      [email,  otpHash, expiresAt],
+    INSERT INTO PASSWORD_RESET
+    (
+        email,
+        otp_hash,
+        role,
+        expires_at
+    )
+    VALUES ($1, $2, $3, $4)
+  `,
+      [email, otpHash, result.rows[0].role, expiresAt],
     );
 
     // ==========================

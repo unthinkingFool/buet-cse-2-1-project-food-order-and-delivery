@@ -74,7 +74,7 @@ function ForgotPassword() {
         `${serverUrl}/api/auth/reset-password`,
         {
           email,
-          password,
+          newPassword:password,
         },
         { withCredentials: true },
       );

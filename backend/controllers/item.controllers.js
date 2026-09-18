@@ -442,3 +442,62 @@ export const getItemTotalSold = async (req, res) => {
     });
   }
 };
+
+export const rating = async (req, res) => {
+  try {
+    const { itemId, rating } = req.body;
+
+    if (!itemId || rating === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Item ID and rating are required",
+      });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5",
+      });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE ITEM
+      SET
+        rating = (
+          (COALESCE(rating, 0) * rating_count) + $1
+        ) / (rating_count + 1),
+        rating_count = rating_count + 1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, name, rating, rating_count
+      `,
+      [rating, itemId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Rating submitted successfully",
+      item: result.rows[0],
+    });
+
+  } catch (error) {
+    console.log(
+      "error while handling rating in the backend : ",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};

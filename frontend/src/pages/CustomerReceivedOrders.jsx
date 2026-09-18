@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { motion } from "framer-motion";
@@ -13,9 +13,12 @@ import {
   Package,
   Phone,
   Store,
+  Star,
 } from "lucide-react";
 
 import useGetCustomerReceivedOrders from "../hooks/useGetCustomerReceivedOrders";
+import axios from "axios";
+import { serverUrl } from "../App";
 
 function CustomerReceivedOrders() {
   const navigate = useNavigate();
@@ -23,8 +26,55 @@ function CustomerReceivedOrders() {
   // Get received orders from Redux
   const receivedOrders = useSelector((state) => state.user.receivedOrders);
 
+  const [selectedRatings, setSelectedRatings] = useState({});
+  const [submittedRatings, setSubmittedRatings] = useState({});
+  const [ratingLoading, setRatingLoading] = useState({});
+
   // Fetch received orders
   useGetCustomerReceivedOrders();
+
+  const handleRating = async (itemId) => {
+    const selectedRating = selectedRatings[itemId];
+
+    if (!selectedRating) {
+      return;
+    }
+
+    try {
+      setRatingLoading((prev) => ({
+        ...prev,
+        [itemId]: true,
+      }));
+
+      const response = await axios.post(
+        `${serverUrl}/api/item/rating`,
+        {
+          itemId,
+          rating: selectedRating,
+        },
+        {
+          withCredentials: true,
+        },
+      );
+
+      console.log("RATING RESPONSE:", response.data);
+
+      setSubmittedRatings((prev) => ({
+        ...prev,
+        [itemId]: true,
+      }));
+    } catch (error) {
+      console.log(
+        "ERROR WHILE SUBMITTING RATING:",
+        error.response?.data || error.message,
+      );
+    } finally {
+      setRatingLoading((prev) => ({
+        ...prev,
+        [itemId]: false,
+      }));
+    }
+  };
 
   const cardVariants = {
     hidden: { opacity: 0, y: 14 },
@@ -60,7 +110,9 @@ function CustomerReceivedOrders() {
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FF5A36] mb-2">
             Delivered
           </p>
-          <h1 className="text-3xl font-black text-[#1F2023]">Your Received Orders</h1>
+          <h1 className="text-3xl font-black text-[#1F2023]">
+            Your Received Orders
+          </h1>
           <p className="mt-1 text-sm text-gray-500">
             Orders that have been successfully delivered to you
           </p>
@@ -82,7 +134,9 @@ function CustomerReceivedOrders() {
                 {/* Order Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b-2 border-gray-100">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Order #{order.order_id}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                      Order #{order.order_id}
+                    </p>
                     <h2 className="text-sm font-black text-[#1F2023] mt-0.5">
                       {order.restaurant_name}
                     </h2>
@@ -104,8 +158,12 @@ function CustomerReceivedOrders() {
                     </h3>
 
                     <div className="space-y-1 text-xs">
-                      <p className="font-bold text-[#1F2023]">{order.restaurant_name}</p>
-                      <p className="text-gray-500">{order.restaurant_address}</p>
+                      <p className="font-bold text-[#1F2023]">
+                        {order.restaurant_name}
+                      </p>
+                      <p className="text-gray-500">
+                        {order.restaurant_address}
+                      </p>
                       <p className="text-gray-500">{order.restaurant_city}</p>
 
                       {order.restaurant_contact && (
@@ -126,7 +184,9 @@ function CustomerReceivedOrders() {
 
                     {order.rider_id ? (
                       <div className="space-y-1 text-xs">
-                        <p className="font-bold text-[#1F2023]">{order.rider_name}</p>
+                        <p className="font-bold text-[#1F2023]">
+                          {order.rider_name}
+                        </p>
 
                         {order.rider_contact && (
                           <div className="flex items-center gap-1.5 text-gray-500">
@@ -143,7 +203,9 @@ function CustomerReceivedOrders() {
                         )}
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-400">Rider information unavailable</p>
+                      <p className="text-xs text-gray-400">
+                        Rider information unavailable
+                      </p>
                     )}
                   </div>
 
@@ -167,14 +229,16 @@ function CustomerReceivedOrders() {
                 <div className="px-4 pb-4">
                   <div className="flex items-center gap-1.5 mb-2">
                     <Package className="h-3.5 w-3.5 text-[#FF5A36]" />
-                    <h3 className="text-xs font-bold uppercase tracking-wide text-[#1F2023]">Ordered Items</h3>
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-[#1F2023]">
+                      Ordered Items
+                    </h3>
                   </div>
 
                   <div className="space-y-2">
                     {order.items?.map((item) => (
                       <div
                         key={item.order_item_id}
-                        className="flex items-center justify-between bg-[#FAFAF8] border-2 border-gray-100 px-3 py-2"
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-[#FAFAF8] border-2 border-gray-100 px-3 py-3"
                       >
                         <div className="flex items-center gap-2.5">
                           {item.item_image && (
@@ -189,15 +253,66 @@ function CustomerReceivedOrders() {
                             <p className="text-xs font-bold text-[#1F2023]">
                               {item.item_name}
                             </p>
+
                             <p className="text-[11px] text-gray-400">
                               ৳{item.price} × {item.quantity}
                             </p>
                           </div>
                         </div>
 
-                        <p className="text-xs font-bold text-[#1F2023]">
-                          ৳{item.item_total}
-                        </p>
+                        <div className="flex items-center justify-between sm:justify-end gap-4">
+                          {/* Rating */}
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedRatings((prev) => ({
+                                    ...prev,
+                                    [item.item_id]: star,
+                                  }))
+                                }
+                                disabled={submittedRatings[item.item_id]}
+                                className="transition-transform hover:scale-110 disabled:cursor-default"
+                              >
+                                <Star
+                                  className={`h-4 w-4 ${
+                                    star <= (selectedRatings[item.item_id] || 0)
+                                      ? "fill-[#FF5A36] text-[#FF5A36]"
+                                      : "text-gray-300"
+                                  }`}
+                                />
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Submit / Rated */}
+                          {submittedRatings[item.item_id] ? (
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-green-600">
+                              Rated
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={
+                                !selectedRatings[item.item_id] ||
+                                ratingLoading[item.item_id]
+                              }
+                              onClick={() => handleRating(item.item_id)}
+                              className="border-2 border-[#1F2023] bg-[#1F2023] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#FF5A36] hover:border-[#FF5A36] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {ratingLoading[item.item_id]
+                                ? "Rating..."
+                                : "Rate"}
+                            </button>
+                          )}
+
+                          {/* Item total */}
+                          <p className="text-xs font-bold text-[#1F2023]">
+                            ৳{item.item_total}
+                          </p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -208,12 +323,18 @@ function CustomerReceivedOrders() {
                   <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-gray-400">
                     <CreditCard className="h-3.5 w-3.5" />
                     Payment:
-                    <span className="text-[#1F2023]">{order.payment_method}</span>
+                    <span className="text-[#1F2023]">
+                      {order.payment_method}
+                    </span>
                   </div>
 
                   <div className="text-right">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Order Total</p>
-                    <p className="text-base font-black text-[#FF5A36]">৳{order.subtotal}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                      Order Total
+                    </p>
+                    <p className="text-base font-black text-[#FF5A36]">
+                      ৳{order.subtotal}
+                    </p>
                   </div>
                 </div>
               </motion.div>
@@ -222,7 +343,9 @@ function CustomerReceivedOrders() {
         ) : (
           <div className="border-2 border-dashed border-gray-300 bg-white py-16 text-center">
             <Package className="h-10 w-10 mx-auto text-gray-300 mb-3" />
-            <h2 className="text-sm font-bold uppercase tracking-wide text-[#1F2023]">No received orders</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide text-[#1F2023]">
+              No received orders
+            </h2>
             <p className="mt-1 text-xs text-gray-400">
               Your successfully delivered orders will appear here.
             </p>

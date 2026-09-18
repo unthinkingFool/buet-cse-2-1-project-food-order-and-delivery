@@ -14,6 +14,7 @@ const userSlice = createSlice({
     receivedOrders: [],
     searchItems:null,
     socket:null,
+    myIssues: [],
   },
   reducers: {
     setUserData: (state, action) => {
@@ -100,6 +101,17 @@ const userSlice = createSlice({
     setSocket: (state,action)=>{
       state.socket=action.payload;
     },
+
+    setMyIssues: (state, action) => {
+      state.myIssues = action.payload;
+    },
+
+    addMyIssue: (state, action) => {
+      state.myIssues = [
+        action.payload,
+        ...state.myIssues,
+      ];
+    },
   },
 });
 
@@ -119,5 +131,7 @@ export const {
   setReceivedOrders,
   setSearchItems,
   setSocket,
+  setMyIssues,
+  addMyIssue
 } = userSlice.actions;
 export default userSlice.reducer;

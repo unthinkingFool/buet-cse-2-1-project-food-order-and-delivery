@@ -15,11 +15,18 @@ const initialState = {
   // ============================================================
 
   restaurants: [],
-  pendingRestaurants:[],
-  suspendedRestaurants:[],
+  pendingRestaurants: [],
+  suspendedRestaurants: [],
   restaurantsLoading: false,
 
   selectedRestaurant: null,
+
+  // ============================================================
+  // CUSTOMERS
+  // ============================================================
+
+  customers: [],
+  customersLoading: false,
 
   // ============================================================
   // GENERAL
@@ -27,6 +34,8 @@ const initialState = {
 
   loading: false,
   error: null,
+
+  issueReports: [],
 };
 
 const adminSlice = createSlice({
@@ -97,8 +106,7 @@ const adminSlice = createSlice({
       const approvedRestaurant = action.payload;
 
       const restaurant = state.restaurants.find(
-        (restaurant) =>
-          restaurant.id === approvedRestaurant.id
+        (restaurant) => restaurant.id === approvedRestaurant.id,
       );
 
       if (restaurant) {
@@ -109,6 +117,18 @@ const adminSlice = createSlice({
         state.dashboardData.restaurants.approved += 1;
         state.dashboardData.restaurants.pending -= 1;
       }
+    },
+
+    // ============================================================
+    // CUSTOMERS
+    // ============================================================
+
+    setCustomers: (state, action) => {
+      state.customers = action.payload;
+    },
+
+    setCustomersLoading: (state, action) => {
+      state.customersLoading = action.payload;
     },
 
     // ============================================================
@@ -125,6 +145,10 @@ const adminSlice = createSlice({
 
     setAdminError: (state, action) => {
       state.error = action.payload;
+    },
+
+    setIssueReports: (state, action) => {
+      state.issueReports = action.payload;
     },
   },
 });
@@ -148,6 +172,9 @@ export const {
 
   setAdminLoading,
   setAdminError,
+  setIssueReports,
+  setCustomers,
+  setCustomersLoading,
 } = adminSlice.actions;
 
 export default adminSlice.reducer;

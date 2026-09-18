@@ -9,6 +9,7 @@ import {
   toggleItemAvailability,
   searchItems,
   getItemTotalSold,
+  rating,
 } from "../controllers/item.controllers.js";
 
 import { upload } from "../middlewares/multer.js";
@@ -34,5 +35,12 @@ itemRouter.get(
   isAuth,
   getItemTotalSold
 );
+
+itemRouter.post(
+  "/rating",
+  isAuth,
+  rating
+);
+
 
 export default itemRouter;

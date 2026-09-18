@@ -1,4 +1,4 @@
--- ============================================================
+s-- ============================================================
 -- Food Delivery App — PostgreSQL Schema
 -- ============================================================
 
@@ -187,6 +187,7 @@ CREATE TABLE ITEM (
     image_link      VARCHAR(500),
     total_sold      INTEGER DEFAULT 0,
     rating          NUMERIC(3,2),
+	rating_count 	INTEGER NOT NULL DEFAULT 0,
 
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -13,7 +13,7 @@ import orderRouter from "./routes/order.routes.js";
 import riderRouter from "./routes/rider.routes.js";
 import deliveryRouter from "./routes/delivery.routes.js";
 import adminRouter from "./routes/admin.routes.js";
-import issueRouter from "./routes/issue.routes.js";
+import issueRouter from "./routes/issues.routes.js";
 import paymentRouter from "./routes/payment.routes.js";
 import { Server } from "socket.io";
 import { socketHandler } from "./socket.js";
@@ -51,6 +51,7 @@ app.use("/api/delivery",deliveryRouter);
 app.use("/api/admin",adminRouter);
 app.use("/api/issues",issueRouter);
 app.use("/api/payment",paymentRouter);
+app.use("/api/issue",issueRouter);
 
 socketHandler(io)
 

@@ -373,6 +373,13 @@ function Nav() {
               )}
             </AnimatePresence>
           </div>
+          
+          <button
+              className="hidden sm:block text-xs font-bold uppercase tracking-wide text-[#1F2023] px-3 py-2 hover:bg-gray-100 transition-colors cursor-pointer"
+              onClick={()=>navigate("/issue")}
+            >
+              Issue
+            </button>
         </div>
       </div>
     </div>

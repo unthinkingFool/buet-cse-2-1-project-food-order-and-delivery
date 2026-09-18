@@ -39,7 +39,7 @@ import AdminCustomers from "./pages/admin/AdminCustomers";
 import AdminRiders from "./pages/admin/AdminRiders";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminIssues from "./pages/admin/AdminIssues";
-
+import Issue from "./pages/Issue"
 import AdminLayout from "./components/admin/AdminLayout";
 
 import useGetCurrentAdmin from "./hooks/admin/useGetCurrentAdmin";
@@ -70,6 +70,8 @@ function App() {
       withCredentials: true,
     });
 
+    console.log("Creating socket:", socketInstance.id);
+
     dispatch(setSocket(socketInstance));
 
     socketInstance.on("connect", () => {
@@ -77,11 +79,11 @@ function App() {
     });
 
     return () => {
+      console.log("Disconnecting socket:", socketInstance.id);
       socketInstance.disconnect();
     };
   }, [dispatch]);
 
-  
   useEffect(() => {
     if (!socket || !userData) {
       return;
@@ -208,6 +210,11 @@ function App() {
         <Route
           path="/track-shop-order/:shop_order_id"
           element={userData ? <TrackOrder /> : <Navigate to="/signin" />}
+        />
+
+        <Route
+          path="/issue"
+          element={userData ? <Issue /> : <Navigate to="/signin" />}
         />
 
         {/* ====================================================== */}

@@ -16,6 +16,7 @@ import {
 import { serverUrl } from "../App";
 import axios from "axios";
 import RiderTracking from "../components/RiderTracking";
+import { useSelector } from "react-redux";
 
 function TrackOrder() {
   const navigate = useNavigate();
@@ -23,6 +24,8 @@ function TrackOrder() {
 
   const [shopOrder, setshopOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { socket } = useSelector((state) => state.user);
+  const [liveLocations, setliveLocations] = useState({});
 
   const handleGetOrder = async () => {
     try {
@@ -46,6 +49,47 @@ function TrackOrder() {
   };
 
   useEffect(() => {
+    if (!socket || !shopOrder?.order?.rider?.id) {
+      console.log("Socket or rider not available");
+      return;
+    }
+
+    const riderId = shopOrder.order.rider.id;
+
+    console.log("Listening for rider:", riderId);
+
+    const handleRiderLocation = ({
+      riderId: incomingRiderId,
+      latitude,
+      longitude,
+    }) => {
+      console.log("Received rider location:", {
+        incomingRiderId,
+        latitude,
+        longitude,
+      });
+
+      if (Number(incomingRiderId) !== Number(riderId)) {
+        console.log("Different rider, ignoring location");
+        return;
+      }
+
+      console.log("Updating live rider location");
+
+      setliveLocations({
+        latitude,
+        longitude,
+      });
+    };
+
+    socket.on("updateRiderLocationOnCustomer", handleRiderLocation);
+
+    return () => {
+      socket.off("updateRiderLocationOnCustomer", handleRiderLocation);
+    };
+  }, [socket, shopOrder?.order?.rider?.id]);
+
+  useEffect(() => {
     handleGetOrder();
   }, [shop_order_id]);
 
@@ -59,7 +103,9 @@ function TrackOrder() {
         <div className="text-center">
           <div className="h-9 w-9 border-4 border-gray-200 border-t-[#FF5A36] rounded-full animate-spin mx-auto" />
 
-          <p className="text-sm font-bold uppercase tracking-wide text-gray-500 mt-3">Loading order...</p>
+          <p className="text-sm font-bold uppercase tracking-wide text-gray-500 mt-3">
+            Loading order...
+          </p>
         </div>
       </div>
     );
@@ -185,7 +231,9 @@ function TrackOrder() {
         >
           <div className="flex items-center justify-between mb-6">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Current Status</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                Current Status
+              </p>
 
               <h2 className="text-lg font-black text-[#FF5A36] mt-1">
                 {order.status === "out_for_delivery"
@@ -415,7 +463,9 @@ function TrackOrder() {
               </div>
 
               <div className="text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Rider GPS</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  Rider GPS
+                </p>
 
                 <p className="text-xs text-gray-500 mt-1">
                   {order.rider.latitude}, {order.rider.longitude}
@@ -441,9 +491,14 @@ function TrackOrder() {
               <div className="mt-4 bg-[#FF5A36]/5 border-2 border-[#FF5A36]/10 p-3">
                 <RiderTracking
                   data={{
-                    rider_latitude: order.rider.latitude,
-                    rider_longitude: order.rider.longitude,
+                    rider_latitude:
+                      liveLocations.latitude ?? order.rider.latitude,
+
+                    rider_longitude:
+                      liveLocations.longitude ?? order.rider.longitude,
+
                     delivery_latitude: order.delivery.latitude,
+
                     delivery_longitude: order.delivery.longitude,
                   }}
                 />
@@ -472,7 +527,9 @@ function TrackOrder() {
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Payment Method</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                Payment Method
+              </p>
 
               <p className="text-sm font-bold text-[#1F2023] mt-1 uppercase">
                 {order.payment.method}
@@ -480,7 +537,9 @@ function TrackOrder() {
             </div>
 
             <div className="text-right">
-              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Shop Total</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                Shop Total
+              </p>
 
               <p className="text-lg font-black text-[#1F2023]">
                 ৳{order.subtotal}

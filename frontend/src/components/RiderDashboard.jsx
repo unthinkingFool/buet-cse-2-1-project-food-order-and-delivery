@@ -53,6 +53,11 @@ function RiderDashboard() {
   // Which shop order currently has the OTP box open
   const [otpOrderId, setOtpOrderId] = useState(null);
 
+  const [liveLocations, setliveLocations] = useState({
+    latitude: null,
+    longitude: null,
+  });
+
   // OTP input
   const [otp, setOtp] = useState("");
 
@@ -75,6 +80,99 @@ function RiderDashboard() {
 
   console.log("Available Shop Orders:", shopOrders);
 
+  //=========================================================
+  // live tracking
+  //=======================================================
+
+  useEffect(() => {
+    console.log("RIDER TRACKING EFFECT:", {
+      socketExists: !!socket,
+      socketConnected: socket?.connected,
+      userId: userData?.id,
+      role: userData?.role,
+    });
+
+    if (!socket || userData?.role !== "rider") {
+      console.log("Rider tracking NOT started");
+      return;
+    }
+
+    console.log("Starting rider live location tracking");
+
+    if (!navigator.geolocation) {
+      console.log("Geolocation is NOT supported");
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+
+        console.log("RIDER GPS:", {
+          latitude,
+          longitude,
+        });
+
+        socket.emit("updateLocation", {
+          latitude,
+          longitude,
+          userId: userData.id,
+        });
+
+        console.log("RIDER LOCATION EMITTED");
+      },
+      (error) => {
+        console.error("RIDER GEOLOCATION ERROR:", error);
+      },
+      {
+        enableHighAccuracy: true,
+      },
+    );
+
+    console.log("Geolocation watcher started:", watchId);
+
+    return () => {
+      console.log("Stopping rider location watcher:", watchId);
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [socket, userData?.id, userData?.role]);
+
+  useEffect(() => {
+    if (!socket || userData?.role !== "rider" || !userData?.id) {
+      return;
+    }
+
+    const handleRiderLocation = ({
+      riderId: incomingRiderId,
+      latitude,
+      longitude,
+    }) => {
+      console.log("RIDER DASHBOARD LOCATION RECEIVED:", {
+        incomingRiderId,
+        latitude,
+        longitude,
+      });
+
+      // Only accept this rider's own location
+      if (Number(incomingRiderId) !== Number(userData.id)) {
+        return;
+      }
+
+      console.log("Updating rider's own live location");
+
+      setliveLocations({
+        latitude,
+        longitude,
+      });
+    };
+
+    socket.on("updateRiderLocationOnCustomer", handleRiderLocation);
+
+    return () => {
+      socket.off("updateRiderLocationOnCustomer", handleRiderLocation);
+    };
+  }, [socket, userData?.id, userData?.role]);
   // ============================================================
   // FETCH BROADCASTED SHOP ORDERS
   // ============================================================
@@ -649,7 +747,19 @@ function RiderDashboard() {
                   ================================================== */}
 
                   <div>
-                    <RiderTracking data={order} />
+                    {liveLocations.latitude != null &&
+                      liveLocations.longitude != null &&
+                      order.delivery_latitude != null &&
+                      order.delivery_longitude != null && (
+                        <RiderTracking
+                          data={{
+                            rider_latitude: liveLocations.latitude,
+                            rider_longitude: liveLocations.longitude,
+                            delivery_latitude: order.delivery_latitude,
+                            delivery_longitude: order.delivery_longitude,
+                          }}
+                        />
+                      )}
                   </div>
 
                   {/* ==================================================

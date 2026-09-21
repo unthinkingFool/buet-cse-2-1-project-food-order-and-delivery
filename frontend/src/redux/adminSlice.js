@@ -28,6 +28,13 @@ const initialState = {
   customers: [],
   customersLoading: false,
 
+  //===============================================================
+  // RIDERS
+  //================================================================
+
+  riders:[],
+  ridersLoading: false,
+
   // ============================================================
   // GENERAL
   // ============================================================
@@ -132,6 +139,18 @@ const adminSlice = createSlice({
     },
 
     // ============================================================
+    // RIDERS
+    // ============================================================
+
+    setRiders: (state, action) => {
+      state.riders = action.payload;
+    },
+
+    setRidersLoading: (state, action) => {
+      state.ridersLoading = action.payload;
+    },
+
+    // ============================================================
     // GENERAL LOADING
     // ============================================================
 
@@ -175,6 +194,8 @@ export const {
   setIssueReports,
   setCustomers,
   setCustomersLoading,
+  setRiders,
+  setRidersLoading,
 } = adminSlice.actions;
 
 export default adminSlice.reducer;

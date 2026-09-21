@@ -110,8 +110,8 @@ function App() {
   const { adminData } = useSelector((state) => state.admin);
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+    // <AnimatePresence mode="wait">
+      <Routes >
         {/* ====================================================== */}
         {/* USER ROUTES */}
         {/* ====================================================== */}
@@ -251,7 +251,7 @@ function App() {
           <Route path="issues" element={<AdminIssues />} />
         </Route>
       </Routes>
-    </AnimatePresence>
+    // </AnimatePresence>
   );
 }
 

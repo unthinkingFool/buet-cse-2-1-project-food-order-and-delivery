@@ -1,6 +1,7 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { setAdminData } from "../../redux/adminSlice";
 import {
   LayoutDashboard,
   Store,
@@ -10,6 +11,9 @@ import {
   AlertCircle,
   LogOut,
 } from "lucide-react";
+import axios from "axios";
+import { serverUrl } from "../../App";
+import { useDispatch, useSelector } from "react-redux";
 
 const menuItems = [
   {
@@ -34,18 +38,38 @@ const menuItems = [
     icon: Bike,
   },
   {
-    name: "Orders",
-    path: "/admin/orders",
-    icon: ShoppingBag,
-  },
-  {
     name: "Issues",
     path: "/admin/issues",
     icon: AlertCircle,
   },
 ];
 
+
+
 function AdminSidebar() {
+  const navigate=useNavigate();
+  const dispatch = useDispatch()
+   const handleLogout = async () => {
+    try {
+      const response = await axios.post(
+        `${serverUrl}/api/admin/logout`,
+        {},
+        {
+          withCredentials: true,
+        }
+      );
+
+      if (response.data.success) {
+        dispatch(setAdminData(null));
+        navigate("/admin/login", { replace: true });
+      }
+    } catch (error) {
+      console.error(
+        "ADMIN LOGOUT ERROR:",
+        error.response?.data || error.message
+      );
+    }
+  };
   return (
     <motion.aside
       initial={{ opacity: 0, x: -20 }}
@@ -123,6 +147,17 @@ function AdminSidebar() {
           <p className="text-sm font-bold text-[#1F2023] mt-1 truncate">
             Administrator
           </p>
+          {/* LOGOUT */}
+          <button
+            onClick={handleLogout}
+            className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-2 border-2 border-[#e80a06] bg-white text-[#1F2023] text-xs font-bold uppercase tracking-wide transition hover:bg-[#ec2e11] hover:text-white"
+          >
+            <LogOut size={16} />
+            Logout
+          </button>
+        </div>
+        <div>
+          
         </div>
       </div>
     </motion.aside>

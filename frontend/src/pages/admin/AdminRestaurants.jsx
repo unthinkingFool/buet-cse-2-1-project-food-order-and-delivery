@@ -94,6 +94,27 @@ const handleSuspend = async (id) => {
   }
 };
 
+const handleUnSuspend = async (id) => {
+  try {
+    const response = await axios.patch(
+      `${serverUrl}/api/admin/restaurants/${id}/unsuspend`,
+      {},
+      {
+        withCredentials: true,
+      }
+    );
+
+    if (response.data.success) {
+      // update your local state / redux here
+      console.log("Restaurant unsuspended successfully");
+    }
+  } catch (error) {
+    console.error(
+      "UNSUSPEND RESTAURANT ERROR:",
+      error.response?.data || error.message
+    );
+  }
+};
 
   return (
     <div className="p-6">
@@ -251,7 +272,7 @@ const handleSuspend = async (id) => {
                         }
                       onClick={()=>{handleSuspend(restaurant.id)}}
                     >
-                      Suspended
+                      Suspend
                     </motion.button>
                     {restaurant.is_approved && (
                       <span className="px-3 py-1 border-2 border-green-600 bg-green-50 text-green-700 text-xs font-bold uppercase tracking-wide">
@@ -353,7 +374,7 @@ const handleSuspend = async (id) => {
                   {/* ========================================= */}
 
                   <div className="flex flex-wrap items-center gap-3">
-                   
+                  
                       <span 
                       onClick={() => handleApprove(restaurant.id)}
                       className="cursor-pointer px-3 py-1 border-2 border-green-600 bg-green-50 text-green-700 text-xs font-bold uppercase tracking-wide">
@@ -361,15 +382,7 @@ const handleSuspend = async (id) => {
                       </span>
                     
 
-                    <span
-                      className={`px-3 py-1 border-2 text-xs font-bold uppercase tracking-wide ${
-                        restaurant.status === "open"
-                          ? "border-green-600 bg-green-50 text-green-700"
-                          : "border-gray-300 bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {restaurant.status}
-                    </span>
+                    
                   </div>
                 </motion.div>
               ))}
@@ -378,7 +391,7 @@ const handleSuspend = async (id) => {
         </div>
       )}
       {/** suspended restaurants */}
-      {suspended && !approved && (
+      {suspended &&  !approved && (
         <div
           style={{ boxShadow: "6px 6px 0px 0px #1F2023" }}
           className="border-2 border-[#1F2023] bg-white overflow-hidden"
@@ -459,16 +472,29 @@ const handleSuspend = async (id) => {
                         Approved
                       </span>
                     )}
-
-                    <span
-                      className={`px-3 py-1 border-2 text-xs font-bold uppercase tracking-wide ${
-                        restaurant.status === "open"
-                          ? "border-green-600 bg-green-50 text-green-700"
-                          : "border-gray-300 bg-gray-100 text-gray-600"
-                      }`}
+                    <motion.button
+                      whileHover={{
+                        x: 1,
+                        y: 1,
+                        boxShadow: "1px 1px 0px 0px #1F2023",
+                      }}
+                      whileTap={{
+                        x: 2,
+                        y: 2,
+                        boxShadow: "0px 0px 0px 0px #1F2023",
+                      }}
+                      //onClick={handleSuspendRestaurant}
+                      style={{
+                        boxShadow: suspended
+                          ? "3px 3px 0px 0px #1F2023"
+                          : "none",
+                      }}
+                      className={`px-4 py-2 border-2 border-[#1F2023] text-xs font-bold uppercase tracking-wide transition cursor-pointer bg-[#155b1f] text-white`
+                        }
+                      onClick={()=>{handleUnSuspend(restaurant.id)}}
                     >
-                      {restaurant.status}
-                    </span>
+                      Aprove
+                    </motion.button>
                   </div>
                 </motion.div>
               ))}

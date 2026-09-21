@@ -1485,17 +1485,10 @@ export const getAllIssues = async (req, res) => {
       SELECT
         i.id,
 
-        -- Person who submitted the issue
         sender.id AS sent_from_id,
         sender.name AS sent_from_name,
         sender.email AS sent_from_email,
         sender.role AS sent_from_role,
-
-        -- Person the issue is against
-        target.id AS issue_against_id,
-        target.name AS issue_against_name,
-        target.email AS issue_against_email,
-        target.role AS issue_against_role,
 
         i.issue_description,
         i.created_at
@@ -1505,9 +1498,6 @@ export const getAllIssues = async (req, res) => {
       JOIN CUSTOMER sender
         ON i.sent_from_id = sender.id
 
-      JOIN CUSTOMER target
-        ON i.issue_against_id = target.id
-
       ORDER BY i.created_at DESC
     `);
 
@@ -1515,6 +1505,7 @@ export const getAllIssues = async (req, res) => {
       success: true,
       issues: result.rows,
     });
+
   } catch (error) {
     console.error("GET ALL ISSUES ERROR:", error);
 

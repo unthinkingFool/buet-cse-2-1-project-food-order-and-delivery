@@ -6,6 +6,7 @@ import {
 } from "../controllers/issues.controllers.js";
 
 import {isAuth} from "../middlewares/isAuth.js";
+import { adminAuth } from "../middlewares/adminAuth.js";
 
 const issueRouter = express.Router();
 
@@ -19,7 +20,7 @@ issueRouter.get("/my-issues", isAuth, getMyIssue);
 
 
 // Admin
-issueRouter.get("/all", isAuth, getAllIssueAdmin);
+issueRouter.get("/all", adminAuth, getAllIssueAdmin);
 
 
 export default issueRouter;

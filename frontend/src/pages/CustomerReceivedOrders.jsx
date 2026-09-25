@@ -33,8 +33,8 @@ function CustomerReceivedOrders() {
   // Fetch received orders
   useGetCustomerReceivedOrders();
 
-  const handleRating = async (itemId) => {
-    const selectedRating = selectedRatings[itemId];
+  const handleRating = async (orderItemId) => {
+    const selectedRating = selectedRatings[orderItemId];
 
     if (!selectedRating) {
       return;
@@ -43,13 +43,13 @@ function CustomerReceivedOrders() {
     try {
       setRatingLoading((prev) => ({
         ...prev,
-        [itemId]: true,
+        [orderItemId]: true,
       }));
 
       const response = await axios.post(
         `${serverUrl}/api/item/rating`,
         {
-          itemId,
+          orderItemId,
           rating: selectedRating,
         },
         {
@@ -61,7 +61,7 @@ function CustomerReceivedOrders() {
 
       setSubmittedRatings((prev) => ({
         ...prev,
-        [itemId]: true,
+        [orderItemId]: selectedRating,
       }));
     } catch (error) {
       console.log(
@@ -71,7 +71,7 @@ function CustomerReceivedOrders() {
     } finally {
       setRatingLoading((prev) => ({
         ...prev,
-        [itemId]: false,
+        [orderItemId]: false,
       }));
     }
   };
@@ -270,15 +270,21 @@ function CustomerReceivedOrders() {
                                 onClick={() =>
                                   setSelectedRatings((prev) => ({
                                     ...prev,
-                                    [item.item_id]: star,
+                                    [item.order_item_id]: star,
                                   }))
                                 }
-                                disabled={submittedRatings[item.item_id]}
+                                disabled={
+                                  submittedRatings[item.order_item_id] ||
+                                  item.my_rating !== null
+                                }
                                 className="transition-transform hover:scale-110 disabled:cursor-default"
                               >
                                 <Star
                                   className={`h-4 w-4 ${
-                                    star <= (selectedRatings[item.item_id] || 0)
+                                    star <=
+                                    (selectedRatings[item.order_item_id] ??
+                                      item.my_rating ??
+                                      0)
                                       ? "fill-[#FF5A36] text-[#FF5A36]"
                                       : "text-gray-300"
                                   }`}
@@ -288,21 +294,23 @@ function CustomerReceivedOrders() {
                           </div>
 
                           {/* Submit / Rated */}
-                          {submittedRatings[item.item_id] ? (
+                          {submittedRatings[item.order_item_id] ||
+                          item.my_rating !== null ? (
                             <span className="text-[11px] font-bold uppercase tracking-wide text-green-600">
-                              Rated
+                              Rated ({item.my_rating || submittedRatings[item.order_item_id]}/5)
                             </span>
                           ) : (
                             <button
                               type="button"
                               disabled={
-                                !selectedRatings[item.item_id] ||
-                                ratingLoading[item.item_id]
+                                !selectedRatings[item.order_item_id] ||
+                                ratingLoading[item.order_item_id] ||
+                                item.my_rating !== null
                               }
-                              onClick={() => handleRating(item.item_id)}
+                              onClick={() => handleRating(item.order_item_id)}
                               className="border-2 border-[#1F2023] bg-[#1F2023] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white transition-colors hover:bg-[#FF5A36] hover:border-[#FF5A36] disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {ratingLoading[item.item_id]
+                              {ratingLoading[item.order_item_id]
                                 ? "Rating..."
                                 : "Rate"}
                             </button>

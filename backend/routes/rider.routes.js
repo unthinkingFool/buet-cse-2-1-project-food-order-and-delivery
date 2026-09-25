@@ -4,6 +4,7 @@ import {
   getBroadcastedShopOrders,
   getDeliveredOrders,
   getMyAssignedOrders,
+  getMyDeliveryStatistics,
 } from "../controllers/rider.controllers.js";
 import {isAuth} from "../middlewares/isAuth.js"
 import { sendDeliveryOTP, verifyDeliveryOTP } from "../controllers/deliveryOtp.controllers.js";
@@ -24,6 +25,7 @@ riderRouter.get("/assigned-orders", isAuth, getMyAssignedOrders);
 
 // Orders already delivered by the rider
 riderRouter.get("/delivered-orders", isAuth, getDeliveredOrders);
+riderRouter.get("/statistics", isAuth, getMyDeliveryStatistics);
 
 
 // ============================================================

@@ -2,6 +2,7 @@ import pool from "../config/db.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 
 export const createOrEditRestaurant = async (req, res) => {
+  const client = await pool.connect();
   try {
     const {
   name,
@@ -23,7 +24,8 @@ export const createOrEditRestaurant = async (req, res) => {
     }
 
     // Check whether this owner already has a restaurant
-    const existingRestaurant = await pool.query(
+    await client.query("BEGIN");
+    const existingRestaurant = await client.query(
       `SELECT id
        FROM RESTAURANT
        WHERE owner_id = $1`,
@@ -34,7 +36,7 @@ export const createOrEditRestaurant = async (req, res) => {
     // RESTAURANT EXISTS → UPDATE
     // ==========================================
     if (existingRestaurant.rows.length > 0) {
-      const result = await pool.query(
+      const result = await client.query(
   `UPDATE RESTAURANT
    SET
      name = $1,
@@ -60,6 +62,7 @@ export const createOrEditRestaurant = async (req, res) => {
   ],
 );
 
+      await client.query("COMMIT");
       return res.status(200).json({
         message: "Restaurant updated successfully",
         restaurant: result.rows[0],
@@ -69,7 +72,7 @@ export const createOrEditRestaurant = async (req, res) => {
     // ==========================================
     // RESTAURANT DOES NOT EXIST → CREATE
     // ==========================================
-    const result = await pool.query(
+    const result = await client.query(
   `INSERT INTO RESTAURANT
     (
       owner_id,
@@ -97,6 +100,7 @@ export const createOrEditRestaurant = async (req, res) => {
   ],
 );
 
+    await client.query("COMMIT");
     return res.status(201).json({
       message: "Restaurant created successfully",
       restaurant: result.rows[0],
@@ -107,10 +111,14 @@ export const createOrEditRestaurant = async (req, res) => {
     return res.status(500).json({
       message: `error while creating/updating restaurant : ${error.message}`,
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
 export const toggleRestaurantStatus = async (req, res) => {
+  const client = await pool.connect();
   try {
     const owner_id = req.id;
 
@@ -122,7 +130,8 @@ export const toggleRestaurantStatus = async (req, res) => {
     }
 
     // Get current restaurant status
-    const restaurantResult = await pool.query(
+    await client.query("BEGIN");
+    const restaurantResult = await client.query(
       `
       SELECT id, name, status
       FROM RESTAURANT
@@ -143,7 +152,7 @@ export const toggleRestaurantStatus = async (req, res) => {
     const newStatus =
       restaurant.status === "open" ? "closed" : "open";
 
-    const result = await pool.query(
+    const result = await client.query(
       `
       UPDATE RESTAURANT
       SET status = $1
@@ -153,6 +162,7 @@ export const toggleRestaurantStatus = async (req, res) => {
       [newStatus, restaurant.id],
     );
 
+    await client.query("COMMIT");
     return res.status(200).json({
       message: `Restaurant is now ${newStatus}`,
       restaurant: result.rows[0],
@@ -163,6 +173,9 @@ export const toggleRestaurantStatus = async (req, res) => {
     return res.status(500).json({
       message: "Error while updating restaurant status",
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
@@ -585,5 +598,23 @@ export const getItemsByRestaurant = async (req, res) => {
     return res.status(500).json({
       message: `error while getting restaurant items : ${error.message}`,
     });
+  }
+};
+
+export const getRestaurantDeliveryStatistics = async (req, res) => {
+  try {
+    if (req.role !== "owner") {
+      return res.status(403).json({ message: "Only restaurant owners can view statistics" });
+    }
+    const restaurantResult = await pool.query("SELECT id FROM RESTAURANT WHERE owner_id = $1", [req.id]);
+    if (restaurantResult.rows.length === 0) return res.status(404).json({ message: "Restaurant not found" });
+
+    const result = await pool.query("SELECT * FROM get_restaurant_delivery_statistics($1)", [restaurantResult.rows[0].id]);
+    return res.status(200).json({ message: "Restaurant statistics fetched successfully", statistics: result.rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    await client.query("ROLLBACK");
+    console.error("GET RESTAURANT STATISTICS ERROR:", error);
+    return res.status(500).json({ message: "Error while fetching restaurant statistics" });
   }
 };

@@ -2,6 +2,7 @@ import pool from "../config/db.js";
 import uploadOnCloudinary from "../utils/cloudinary.js";
 
 export const addItem = async (req, res) => {
+  const client = await pool.connect();
   try {
     const {
       name,
@@ -21,7 +22,8 @@ export const addItem = async (req, res) => {
     }
 
     // Find restaurant belonging to this owner
-    const restaurantResult = await pool.query(
+    await client.query("BEGIN");
+    const restaurantResult = await client.query(
       `SELECT id
        FROM RESTAURANT
        WHERE owner_id = $1`,
@@ -29,6 +31,7 @@ export const addItem = async (req, res) => {
     );
 
     if (restaurantResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Restaurant not found",
       });
@@ -37,7 +40,7 @@ export const addItem = async (req, res) => {
     const restaurant_id = restaurantResult.rows[0].id;
 
     // Create item
-    const result = await pool.query(
+    const result = await client.query(
       `INSERT INTO ITEM
         (
           restaurant_id,
@@ -65,20 +68,26 @@ export const addItem = async (req, res) => {
 
     const item = result.rows[0];
 
+    await client.query("COMMIT");
     return res.status(201).json({
       message: "Item created successfully",
       item,
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error while creating item:", error);
 
     return res.status(500).json({
       message: `error while creating item : ${error.message}`,
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
 export const editItem = async (req, res) => {
+  const client = await pool.connect();
   try {
     const {
       name,
@@ -99,7 +108,8 @@ export const editItem = async (req, res) => {
     }
 
     // Find restaurant belonging to this owner
-    const restaurantResult = await pool.query(
+    await client.query("BEGIN");
+    const restaurantResult = await client.query(
       `SELECT id
        FROM RESTAURANT
        WHERE owner_id = $1`,
@@ -107,6 +117,7 @@ export const editItem = async (req, res) => {
     );
 
     if (restaurantResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Restaurant not found",
       });
@@ -115,7 +126,7 @@ export const editItem = async (req, res) => {
     const restaurant_id = restaurantResult.rows[0].id;
 
     // Update item only if it belongs to this restaurant
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE ITEM
        SET
          name = $1,
@@ -143,6 +154,7 @@ export const editItem = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Item not found",
       });
@@ -150,26 +162,33 @@ export const editItem = async (req, res) => {
 
     const item = result.rows[0];
 
+    await client.query("COMMIT");
     return res.status(200).json({
       message: "Item updated successfully",
       item,
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error while editing item:", error);
 
     return res.status(500).json({
       message: `error while editing item : ${error.message}`,
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
 export const deleteItem = async (req, res) => {
+  const client = await pool.connect();
   try {
     const item_id = req.params.itemId;
     const owner_id = req.id;
 
     // Find restaurant belonging to this owner
-    const restaurantResult = await pool.query(
+    await client.query("BEGIN");
+    const restaurantResult = await client.query(
       `SELECT id
        FROM RESTAURANT
        WHERE owner_id = $1`,
@@ -177,6 +196,7 @@ export const deleteItem = async (req, res) => {
     );
 
     if (restaurantResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Restaurant not found",
       });
@@ -185,7 +205,7 @@ export const deleteItem = async (req, res) => {
     const restaurant_id = restaurantResult.rows[0].id;
 
     // Delete only if the item belongs to this owner's restaurant
-    const result = await pool.query(
+    const result = await client.query(
       `DELETE FROM ITEM
        WHERE id = $1
        AND restaurant_id = $2
@@ -194,25 +214,32 @@ export const deleteItem = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Item not found",
       });
     }
 
+    await client.query("COMMIT");
     return res.status(200).json({
       message: "Item deleted successfully",
       item: result.rows[0],
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error while deleting item:", error);
 
     return res.status(500).json({
       message: `error while deleting item : ${error.message}`,
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
 export const toggleItemAvailability = async (req, res) => {
+  const client = await pool.connect();
   try {
     const owner_id = req.id;
     const { item_id } = req.params;
@@ -241,7 +268,8 @@ export const toggleItemAvailability = async (req, res) => {
     // Find item and verify ownership
     // ==========================================
 
-    const itemResult = await pool.query(
+    await client.query("BEGIN");
+    const itemResult = await client.query(
       `
       SELECT
         i.id,
@@ -259,6 +287,7 @@ export const toggleItemAvailability = async (req, res) => {
     );
 
     if (itemResult.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "Item not found or you do not own this item",
       });
@@ -272,7 +301,7 @@ export const toggleItemAvailability = async (req, res) => {
 
     const newAvailability = !item.isavailable;
 
-    const result = await pool.query(
+    const result = await client.query(
       `
       UPDATE ITEM
       SET
@@ -284,6 +313,7 @@ export const toggleItemAvailability = async (req, res) => {
       [newAvailability, item_id],
     );
 
+    await client.query("COMMIT");
     return res.status(200).json({
       message: newAvailability
         ? "Item is now available"
@@ -292,11 +322,15 @@ export const toggleItemAvailability = async (req, res) => {
       item: result.rows[0],
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("TOGGLE ITEM AVAILABILITY ERROR:", error);
 
     return res.status(500).json({
       message: "Error while changing item availability",
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
@@ -444,60 +478,92 @@ export const getItemTotalSold = async (req, res) => {
 };
 
 export const rating = async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { itemId, rating } = req.body;
+    const { orderItemId, rating } = req.body;
 
-    if (!itemId || rating === undefined) {
-      return res.status(400).json({
+    if (req.role !== "customer") {
+      return res.status(403).json({
         success: false,
-        message: "Item ID and rating are required",
+        message: "Only customers can submit ratings",
       });
     }
 
-    if (rating < 1 || rating > 5) {
+    if (!orderItemId || rating === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Order item ID and rating are required",
+      });
+    }
+
+    if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) {
       return res.status(400).json({
         success: false,
         message: "Rating must be between 1 and 5",
       });
     }
 
-    const result = await pool.query(
+    await client.query("BEGIN");
+
+    // A customer may rate only one item line from an order they received.
+    const deliveredItem = await client.query(
       `
-      UPDATE ITEM
-      SET
-        rating = (
-          (COALESCE(rating, 0) * rating_count) + $1
-        ) / (rating_count + 1),
-        rating_count = rating_count + 1,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING id, name, rating, rating_count
+      SELECT oi.item_id
+      FROM ORDER_ITEM oi
+      JOIN SHOP_ORDER so ON so.id = oi.shop_order_id
+      JOIN FOOD_ORDER fo ON fo.id = so.order_id
+      WHERE oi.id = $1
+        AND fo.customer_id = $2
+        AND so.status = 'delivered'
+      LIMIT 1
       `,
-      [rating, itemId]
+      [orderItemId, req.id],
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({
+    if (deliveredItem.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
         success: false,
-        message: "Item not found",
+        message: "You can rate only an item from one of your delivered orders",
       });
     }
+
+    // The unique database index prevents duplicate ratings for this order item.
+    const result = await client.query(
+      `INSERT INTO REVIEW (order_item_id, item_id, customer_id, rating)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, order_item_id, item_id, customer_id, rating`,
+      [orderItemId, deliveredItem.rows[0].item_id, req.id, Number(rating)],
+    );
+
+    // trg_refresh_rating_summaries updates ITEM.rating and RESTAURANT.rating here.
+    await client.query("COMMIT");
 
     return res.status(200).json({
       success: true,
       message: "Rating submitted successfully",
-      item: result.rows[0],
+      review: result.rows[0],
     });
 
   } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
     console.log(
       "error while handling rating in the backend : ",
       error
     );
 
+    if (error.code === "23505") {
+      return res.status(409).json({
+        success: false,
+        message: "You have already rated this order item",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: "Internal server error",
     });
+  } finally {
+    client.release();
   }
 };

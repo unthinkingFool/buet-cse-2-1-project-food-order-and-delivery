@@ -2,6 +2,8 @@ import express from "express";
 
 import {
   getCurrentUser,
+  getMyDeliveryCompletionNotifications,
+  markDeliveryNotificationRead,
   getMyReceivedOrders,
   updateUserLocation,
 } from "../controllers/user.controllers.js";
@@ -26,5 +28,15 @@ userRouter.get(
   isAuth,
   getMyReceivedOrders
 )
+userRouter.get(
+  "/delivery-notifications",
+  isAuth,
+  getMyDeliveryCompletionNotifications,
+);
+userRouter.patch(
+  "/delivery-notifications/read",
+  isAuth,
+  markDeliveryNotificationRead,
+);
 
 export default userRouter;

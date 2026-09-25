@@ -126,7 +126,7 @@ CREATE TABLE CUSTOMER (
                         4326
                     )::geography,
 	socket_id       VARCHAR(255),
-	isonline 		BOOLEAN NOT NULL DEFAULT FALSE;
+	isonline 		BOOLEAN NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -329,6 +329,27 @@ CREATE TABLE SHOP_ORDER_BROADCASTED_TO (
                         REFERENCES CUSTOMER(id)
 );
 
+-- Protect delivery assignment invariants even if requests are handled by
+-- separate Node.js processes. Historical completed assignments are allowed.
+CREATE UNIQUE INDEX uq_active_delivery_assignment_per_shop_order
+ON SHOP_ORDER_DELIVERY_ASSIGNMENT (shop_order_id)
+WHERE assignment_status IN ('broadcasted', 'assigned');
+
+CREATE UNIQUE INDEX uq_active_delivery_assignment_per_rider
+ON SHOP_ORDER_DELIVERY_ASSIGNMENT (assigned_to)
+WHERE assigned_to IS NOT NULL
+  AND assignment_status = 'assigned';
+
+CREATE INDEX idx_shop_order_active_rider
+ON SHOP_ORDER (assigned_rider_id)
+WHERE assigned_rider_id IS NOT NULL
+  AND status NOT IN ('delivered', 'cancelled');
+
+CREATE INDEX idx_delivery_assignment_active_rider
+ON SHOP_ORDER_DELIVERY_ASSIGNMENT (assigned_to)
+WHERE assigned_to IS NOT NULL
+  AND assignment_status = 'assigned';
+
 
 -- ============================================================
 -- ORDER_ITEM
@@ -362,6 +383,9 @@ CREATE TABLE ORDER_ITEM (
 
 CREATE TABLE REVIEW (
     id              SERIAL PRIMARY KEY,
+
+    order_item_id   INTEGER NOT NULL
+                    REFERENCES ORDER_ITEM(id),
 
     item_id         INTEGER NOT NULL
                     REFERENCES ITEM(id),
@@ -532,3 +556,139 @@ CREATE TABLE ISSUES (
 
     CHECK (sent_from_id <> issue_against_id)
 );
+
+-- CSE216 database features: audit trigger, computed statistics, and delivery workflow.
+
+
+CREATE TABLE SHOP_ORDER_STATUS_HISTORY (
+    id SERIAL PRIMARY KEY,
+    shop_order_id INTEGER NOT NULL REFERENCES SHOP_ORDER(id) ON DELETE CASCADE,
+    old_status order_status_enum NOT NULL,
+    new_status order_status_enum NOT NULL,
+    changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE FUNCTION log_shop_order_status_change()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.status IS DISTINCT FROM NEW.status THEN
+        INSERT INTO SHOP_ORDER_STATUS_HISTORY (shop_order_id, old_status, new_status)
+        VALUES (NEW.id, OLD.status, NEW.status);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Keep stored item and restaurant ratings aligned when a review is created.
+-- One customer may submit only one rating for one purchased order item.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_review_customer_order_item
+ON REVIEW (customer_id, order_item_id);
+
+CREATE OR REPLACE FUNCTION refresh_rating_summaries()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    restaurant_id_value INTEGER;
+BEGIN
+
+    -- Find the restaurant of the reviewed item
+    SELECT restaurant_id
+    INTO restaurant_id_value
+    FROM ITEM
+    WHERE id = NEW.item_id;
+
+    -- Update item rating
+    UPDATE ITEM
+    SET rating = (
+        SELECT ROUND(AVG(rating)::NUMERIC, 2)
+        FROM REVIEW
+        WHERE item_id = NEW.item_id
+    )
+    WHERE id = NEW.item_id;
+
+    -- Update restaurant rating
+    UPDATE RESTAURANT
+    SET rating = (
+        SELECT ROUND(AVG(rating)::NUMERIC, 2)
+        FROM REVIEW r
+        JOIN ITEM i ON i.id = r.item_id
+        WHERE i.restaurant_id = restaurant_id_value
+    )
+    WHERE id = restaurant_id_value;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_refresh_rating_summaries
+AFTER INSERT ON REVIEW
+FOR EACH ROW
+EXECUTE FUNCTION refresh_rating_summaries();
+
+
+CREATE TRIGGER trg_log_shop_order_status_change
+AFTER UPDATE OF status ON SHOP_ORDER
+FOR EACH ROW EXECUTE FUNCTION log_shop_order_status_change();
+
+CREATE OR REPLACE FUNCTION get_restaurant_delivery_statistics(p_restaurant_id INTEGER)
+RETURNS TABLE (
+    total_shop_orders BIGINT, delivered_orders BIGINT, cancelled_orders BIGINT,
+    delivered_revenue NUMERIC, average_delivered_order_value NUMERIC
+) LANGUAGE sql STABLE AS $$
+    SELECT COUNT(*),
+           COUNT(*) FILTER (WHERE status = 'delivered'),
+           COUNT(*) FILTER (WHERE status = 'cancelled'),
+           COALESCE(SUM(subtotal) FILTER (WHERE status = 'delivered'), 0),
+           ROUND(COALESCE(AVG(subtotal) FILTER (WHERE status = 'delivered'), 0), 2)
+    FROM SHOP_ORDER WHERE restaurant_id = p_restaurant_id;
+$$;
+
+CREATE OR REPLACE FUNCTION get_rider_delivery_statistics(p_rider_id INTEGER)
+RETURNS TABLE (
+    completed_deliveries BIGINT, active_deliveries BIGINT,
+    delivered_order_value NUMERIC, average_delivered_order_value NUMERIC
+) LANGUAGE sql STABLE AS $$
+    SELECT COUNT(*) FILTER (WHERE status = 'delivered'),
+           COUNT(*) FILTER (WHERE status NOT IN ('delivered', 'cancelled')),
+           COALESCE(SUM(subtotal) FILTER (WHERE status = 'delivered'), 0),
+           ROUND(COALESCE(AVG(subtotal) FILTER (WHERE status = 'delivered'), 0), 2)
+    FROM SHOP_ORDER WHERE assigned_rider_id = p_rider_id;
+$$;
+
+CREATE OR REPLACE PROCEDURE complete_delivery(IN p_shop_order_id INTEGER, IN p_rider_id INTEGER)
+LANGUAGE plpgsql AS $$
+DECLARE
+    v_assigned_rider_id INTEGER;
+    v_order_status order_status_enum;
+    v_customer_id INTEGER;
+    v_assignment_id INTEGER;
+BEGIN
+    SELECT so.assigned_rider_id, so.status, fo.customer_id
+    INTO v_assigned_rider_id, v_order_status, v_customer_id
+    FROM SHOP_ORDER so JOIN FOOD_ORDER fo ON fo.id = so.order_id
+    WHERE so.id = p_shop_order_id FOR UPDATE OF so;
+
+
+
+    IF NOT FOUND THEN RAISE EXCEPTION 'Shop order % does not exist', p_shop_order_id; END IF;
+
+    IF v_assigned_rider_id IS DISTINCT FROM p_rider_id THEN RAISE EXCEPTION 'Delivery is not assigned to this rider'; END IF;
+
+
+    IF v_order_status <> 'out_for_delivery' THEN RAISE EXCEPTION 'Only an out-for-delivery order can be completed'; END IF;
+
+
+    UPDATE SHOP_ORDER_DELIVERY_ASSIGNMENT SET assignment_status = 'completed'
+    WHERE shop_order_id = p_shop_order_id AND assigned_to = p_rider_id AND assignment_status = 'assigned'
+    RETURNING id INTO v_assignment_id;
+
+    IF v_assignment_id IS NULL THEN RAISE EXCEPTION 'Active delivery assignment was not found'; END IF;
+
+    UPDATE SHOP_ORDER SET status = 'delivered', updated_at = CURRENT_TIMESTAMP WHERE id = p_shop_order_id;
+
+    INSERT INTO NOTIFICATION (recipient_role, recipient_id, type, title, message, reference_id)
+    VALUES ('customer', v_customer_id, 'delivery_completed', 'Order delivered',
+      'Your order has been delivered successfully.', p_shop_order_id);
+END;
+$$;

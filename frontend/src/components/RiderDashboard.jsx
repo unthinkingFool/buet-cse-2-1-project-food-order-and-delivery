@@ -27,6 +27,8 @@ import {
   Loader2,
   Inbox,
   CheckCircle2,
+  BarChart3,
+  Clock3,
 } from "lucide-react";
 
 function RiderDashboard() {
@@ -69,6 +71,7 @@ function RiderDashboard() {
 
   // Accepting delivery
   const [acceptingId, setAcceptingId] = useState(null);
+  const [statistics, setStatistics] = useState(null);
 
   // ============================================================
   // DEBUG
@@ -218,6 +221,21 @@ function RiderDashboard() {
       }
     };
   }, [socket]);
+
+  useEffect(() => {
+    const loadStatistics = async () => {
+      try {
+        const result = await axios.get(`${serverUrl}/api/rider/statistics`, {
+          withCredentials: true,
+        });
+        setStatistics(result.data.statistics);
+      } catch (error) {
+        console.error("Could not load rider statistics:", error.response?.data || error.message);
+      }
+    };
+
+    if (userData?.role === "rider") loadStatistics();
+  }, [userData]);
 
   // ============================================================
   // SEND DELIVERY OTP
@@ -466,6 +484,26 @@ function RiderDashboard() {
             </p>
           )}
         </motion.div>
+
+        {statistics && (
+          <motion.section
+            custom={1}
+            variants={sectionVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-[#FF5A36]" />
+              <h2 className="text-lg font-black text-[#1F2023]">My Delivery Statistics</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <RiderStatistic label="Completed" value={statistics.completed_deliveries} icon={CheckCircle2} />
+              <RiderStatistic label="Active" value={statistics.active_deliveries} icon={Clock3} />
+              <RiderStatistic label="Delivered value" value={`৳${statistics.delivered_order_value}`} icon={Wallet} />
+              <RiderStatistic label="Average value" value={`৳${statistics.average_delivered_order_value}`} icon={BarChart3} />
+            </div>
+          </motion.section>
+        )}
 
         {/* ======================================================
             AVAILABLE DELIVERIES
@@ -920,6 +958,16 @@ function RiderDashboard() {
           )}
         </motion.div>
       </div>
+    </div>
+  );
+}
+
+function RiderStatistic({ label, value, icon: Icon }) {
+  return (
+    <div className="border-2 border-[#1F2023] bg-white p-4" style={{ boxShadow: "3px 3px 0px 0px #1F2023" }}>
+      <Icon className="mb-2 h-5 w-5 text-[#FF5A36]" />
+      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-[#1F2023]">{value ?? 0}</p>
     </div>
   );
 }

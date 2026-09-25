@@ -16,6 +16,7 @@ function useGetItemsByCity() {
       try {
         const result = await axios.get(
           `${serverUrl}/api/restaurant/items-city/${city}`,
+          { withCredentials: true },
         );
 
         console.log(result.data);

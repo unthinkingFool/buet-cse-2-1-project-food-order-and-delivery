@@ -4,6 +4,7 @@ import genToken from "../utils/token.js";
 import jwt from "jsonwebtoken";
 
 export const signup = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { name, email, password, contact_no, role } = req.body;
 
@@ -27,12 +28,14 @@ export const signup = async (req, res) => {
     }
 
     // Check if customer already exists
-    const existingUser = await pool.query(
+    await client.query("BEGIN");
+    const existingUser = await client.query(
       `SELECT id FROM CUSTOMER WHERE email = $1`,
       [email],
     );
 
     if (existingUser.rows.length !== 0) {
+      await client.query("ROLLBACK");
       return res.status(400).json({
         message: "user already exists",
       });
@@ -40,6 +43,7 @@ export const signup = async (req, res) => {
 
     // Password validation
     if (password.length < 6) {
+      await client.query("ROLLBACK");
       return res.status(400).json({
         message: "password should be at least 6 characters",
       });
@@ -47,6 +51,7 @@ export const signup = async (req, res) => {
 
     // Contact validation
     if (contact_no.length < 11) {
+      await client.query("ROLLBACK");
       return res.status(400).json({
         message: "contact_no should be at least 11 characters",
       });
@@ -56,7 +61,7 @@ export const signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Insert customer
-    const result = await pool.query(
+    const result = await client.query(
       `INSERT INTO CUSTOMER
         (name, email, hashed_password, contact_no, role)
        VALUES ($1, $2, $3, $4, $5)
@@ -64,6 +69,7 @@ export const signup = async (req, res) => {
       [name, email, hashedPassword, contact_no, role],
     );
 
+    await client.query("COMMIT");
     const id = result.rows[0].id;
     
 
@@ -94,11 +100,15 @@ export const signup = async (req, res) => {
       result: result.rows[0],
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("SIGNUP ERROR:", error);
 
     return res.status(500).json({
       message: `error while signing up: ${error.message}`,
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 

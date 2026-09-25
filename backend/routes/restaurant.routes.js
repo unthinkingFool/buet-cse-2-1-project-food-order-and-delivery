@@ -7,6 +7,7 @@ import {
   getMyItems,
   getMyRestaurant,
   getRestaurantByCity,
+  getRestaurantDeliveryStatistics,
   toggleRestaurantStatus,
 } from "../controllers/restaurant.controllers.js";
 import { isAuth } from "../middlewares/isAuth.js";
@@ -22,8 +23,9 @@ shopRouter.post(
 shopRouter.get("/get-my", isAuth, getMyRestaurant);
 shopRouter.get("/my-items", isAuth, getMyItems);
 shopRouter.get("/get-by-city/:city", isAuth, getRestaurantByCity);
-shopRouter.get("/items-city/:city", getItemsByCity);
+shopRouter.get("/items-city/:city", isAuth, getItemsByCity);
 shopRouter.get("/completed-orders", isAuth, getMyCompletedOrders);
+shopRouter.get("/statistics", isAuth, getRestaurantDeliveryStatistics);
 shopRouter.patch("/toggle-status", isAuth, toggleRestaurantStatus);
 shopRouter.get("/items/:restaurantId", isAuth, getItemsByRestaurant);
 export default shopRouter;

@@ -429,47 +429,13 @@ export const verifyDeliveryOTP = async (req, res) => {
       [deliveryOTP.id],
     );
 
-    // ========================================================
-    // UPDATE SHOP ORDER
-    // ========================================================
-
-    const updatedOrderResult = await client.query(
-      `
-      UPDATE SHOP_ORDER
-      SET
-          status = 'delivered',
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING
-          id,
-          order_id,
-          assigned_rider_id,
-          status,
-          updated_at
-      `,
-      [shop_order_id],
-    );
-
-    // ========================================================
-    // COMPLETE DELIVERY ASSIGNMENT
-    // ========================================================
-
-    const updatedAssignmentResult = await client.query(
-      `
-      UPDATE SHOP_ORDER_DELIVERY_ASSIGNMENT
-      SET
-          assignment_status = 'completed'
-      WHERE shop_order_id = $1
-        AND assigned_to = $2
-      RETURNING
-          id,
-          shop_order_id,
-          assigned_to,
-          assignment_status,
-          accepted_at
-      `,
-      [shop_order_id, rider_id],
-    );
+    // Complete the multi-table delivery workflow. The database procedure
+    // updates the assignment and order, creates the customer notification,
+    // and lets the status-history trigger record the change.
+    await client.query("CALL complete_delivery($1, $2)", [
+      shop_order_id,
+      rider_id,
+    ]);
 
     // ========================================================
     // GET UPDATED SHOP ORDER
@@ -550,9 +516,7 @@ export const verifyDeliveryOTP = async (req, res) => {
       success: true,
       message: "Delivery OTP verified successfully. Order marked as delivered.",
 
-      shopOrder: updatedOrderResult.rows[0],
-
-      deliveryAssignment: updatedAssignmentResult.rows[0] || null,
+      shopOrder: deliveredShopOrder,
     });
   } catch (error) {
     await client.query("ROLLBACK");

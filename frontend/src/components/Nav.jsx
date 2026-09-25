@@ -33,6 +33,8 @@ function Nav() {
   const [showinfo, setshowinfo] = useState(false);
   const [query, setquery] = useState("");
   const [signingout, setsigningout] = useState(false);
+  const [deliveryNotifications, setDeliveryNotifications] = useState([]);
+  const [showDeliveryNotifications, setShowDeliveryNotifications] = useState(false);
 
   // ============================================================
   // SIGN OUT
@@ -113,6 +115,44 @@ function Nav() {
       dispatch(setSearchItems([]));
     }
   }, [query, city]);
+
+  useEffect(() => {
+    const loadDeliveryNotifications = async () => {
+      try {
+        const result = await axios.get(`${serverUrl}/api/user/delivery-notifications`, {
+          withCredentials: true,
+        });
+        setDeliveryNotifications(result.data.notifications || []);
+      } catch (error) {
+        console.error("Could not load delivery notifications:", error.response?.data || error.message);
+      }
+    };
+
+    if (userData?.role === "customer") {
+      loadDeliveryNotifications();
+    } else {
+      setDeliveryNotifications([]);
+    }
+  }, [userData]);
+
+  const toggleDeliveryNotifications = () => {
+    setShowDeliveryNotifications((current) => !current);
+  };
+
+  const markDeliveryNotificationRead = async (notificationId) => {
+    try {
+      await axios.patch(
+        `${serverUrl}/api/user/delivery-notifications/read`,
+        { notification_id: notificationId },
+        { withCredentials: true },
+      );
+      setDeliveryNotifications((current) =>
+        current.filter((notification) => notification.id !== notificationId),
+      );
+    } catch (error) {
+      console.error("Could not remove notification:", error.response?.data || error.message);
+    }
+  };
 
   // ============================================================
   // RENDER
@@ -225,6 +265,62 @@ function Nav() {
               <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 bg-[#FF5A36] text-white text-[10px] font-bold flex items-center justify-center">
                 {cartItems?.length || 0}
               </span>
+            </div>
+          )}
+
+          {/* DELIVERY COMPLETED NOTIFICATIONS — CUSTOMER ONLY */}
+          {userData?.role === "customer" && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={toggleDeliveryNotifications}
+                className="relative flex h-10 w-10 items-center justify-center hover:bg-gray-100 transition-colors cursor-pointer"
+                aria-label="Notifications"
+              >
+                <Bell className="h-5 w-5 text-[#1F2023]" />
+                {deliveryNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 bg-[#FF5A36] text-white text-[10px] font-bold flex items-center justify-center">
+                    {deliveryNotifications.length}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showDeliveryNotifications && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18 }}
+                    style={{ boxShadow: "4px 4px 0px 0px #1F2023" }}
+                    className="absolute right-0 top-11 z-50 w-80 border-2 border-[#1F2023] bg-white"
+                  >
+                    <div className="border-b-2 border-gray-100 px-3.5 py-3 text-sm font-black text-[#1F2023]">
+                      Delivered Orders
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {deliveryNotifications.length === 0 ? (
+                        <p className="px-3.5 py-6 text-center text-sm text-gray-500">No completed deliveries yet.</p>
+                      ) : (
+                        deliveryNotifications.map((notification) => (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() => markDeliveryNotificationRead(notification.id)}
+                            className="w-full border-b border-gray-100 bg-[#FFF1EC] px-3.5 py-3 text-left last:border-0 hover:bg-[#FFE3D9]"
+                          >
+                            <p className="text-sm font-bold text-[#1F2023]">{notification.title}</p>
+                            <p className="mt-1 text-xs text-gray-600">{notification.message}</p>
+                            <p className="mt-1.5 text-[10px] font-medium text-gray-400">
+                              {new Date(notification.created_at).toLocaleString()}
+                            </p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 

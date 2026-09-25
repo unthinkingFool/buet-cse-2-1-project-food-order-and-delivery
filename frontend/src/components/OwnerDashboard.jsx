@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
 import { motion } from "framer-motion";
 
 import Nav from "./Nav.jsx";
@@ -22,6 +21,10 @@ import {
   Phone,
   MapPin,
   Loader2,
+  BarChart3,
+  CheckCircle2,
+  XCircle,
+  Wallet,
 } from "lucide-react";
 
 function OwnerDashboard() {
@@ -34,6 +37,29 @@ function OwnerDashboard() {
 
   // UI-only addition (does not affect the request/logic itself)
   const [deletingId, setdeletingId] = useState(null);
+  const [statistics, setStatistics] = useState(null);
+  const [statisticsError, setStatisticsError] = useState("");
+
+  useEffect(() => {
+    const loadStatistics = async () => {
+      try {
+        setStatisticsError("");
+        const result = await axios.get(
+          `${serverUrl}/api/restaurant/statistics`,
+          { withCredentials: true },
+        );
+        setStatistics(result.data.statistics);
+      } catch (error) {
+        setStatisticsError(
+          error.response?.data?.message || "Could not load delivery statistics.",
+        );
+      }
+    };
+
+    if (restaurantData?.restaurant) {
+      loadStatistics();
+    }
+  }, [restaurantData]);
 
   const handleDeleteItem = async (itemId) => {
     const confirmDelete = window.confirm(
@@ -200,6 +226,37 @@ function OwnerDashboard() {
                 )}
               </motion.button>
             </motion.div>
+
+            <motion.section
+              custom={1}
+              variants={sectionVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <div className="mb-4 flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-[#FF5A36]" />
+                <h2 className="text-lg font-black text-[#1F2023]">
+                  Delivery Statistics
+                </h2>
+              </div>
+
+              {statisticsError ? (
+                <p className="border-2 border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {statisticsError}
+                </p>
+              ) : !statistics ? (
+                <p className="border-2 border-[#1F2023] bg-white p-3 text-sm text-gray-500">
+                  Loading delivery statistics...
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <StatisticCard label="Total orders" value={statistics.total_shop_orders} icon={BarChart3} />
+                  <StatisticCard label="Delivered" value={statistics.delivered_orders} icon={CheckCircle2} />
+                  <StatisticCard label="Cancelled" value={statistics.cancelled_orders} icon={XCircle} />
+                  <StatisticCard label="Delivered revenue" value={`৳${statistics.delivered_revenue}`} icon={Wallet} />
+                </div>
+              )}
+            </motion.section>
 
             {/* restaurant profile card */}
             <motion.div
@@ -369,6 +426,19 @@ function OwnerDashboard() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StatisticCard({ label, value, icon: Icon }) {
+  return (
+    <div
+      className="border-2 border-[#1F2023] bg-white p-4"
+      style={{ boxShadow: "3px 3px 0px 0px #1F2023" }}
+    >
+      <Icon className="mb-3 h-5 w-5 text-[#FF5A36]" />
+      <p className="text-xs font-bold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-xl font-black text-[#1F2023]">{value ?? 0}</p>
     </div>
   );
 }

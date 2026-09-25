@@ -228,6 +228,21 @@ export const acceptShopOrder = async (req, res) => {
     await client.query("BEGIN");
 
     // ============================================================
+    // SERIALIZE DELIVERY ACCEPTS FOR THIS RIDER
+    //
+    // `FOR UPDATE` can lock an existing active order, but it cannot
+    // lock the *absence* of one. Without this lock, two simultaneous
+    // accepts for two different shop orders can both observe no active
+    // delivery and assign the same rider twice. PostgreSQL releases
+    // this transaction-scoped advisory lock automatically at COMMIT
+    // or ROLLBACK, including when this server is one of many instances.
+    // ============================================================
+
+    await client.query("SELECT pg_advisory_xact_lock($1::bigint)", [
+      rider_id,
+    ]);
+
+    // ============================================================
     // CHECK IF RIDER ALREADY HAS AN ACTIVE SHOP ORDER
     // ============================================================
 
@@ -468,6 +483,16 @@ export const acceptShopOrder = async (req, res) => {
 
     console.error("ACCEPT SHOP ORDER ERROR:", error);
 
+    // The partial unique indexes are a last line of defence against a
+    // conflicting write from another request or server instance. Return a
+    // useful conflict response instead of exposing it as an internal error.
+    if (error.code === "23505") {
+      return res.status(409).json({
+        message:
+          "This delivery is no longer available, or you already have an active delivery",
+      });
+    }
+
     return res.status(500).json({
       message: "Error while accepting shop order",
       error: error.message,
@@ -677,5 +702,26 @@ export const getDeliveredOrders = async (req, res) => {
     return res.status(500).json({
       message: "Error while fetching delivered orders",
     });
+  }
+};
+
+export const getMyDeliveryStatistics = async (req, res) => {
+  try {
+    if (req.role !== "rider") {
+      return res.status(403).json({ message: "Only riders can view rider statistics" });
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM get_rider_delivery_statistics($1)",
+      [req.id],
+    );
+
+    return res.status(200).json({
+      message: "Rider statistics fetched successfully",
+      statistics: result.rows[0],
+    });
+  } catch (error) {
+    console.error("GET RIDER STATISTICS ERROR:", error);
+    return res.status(500).json({ message: "Could not fetch rider statistics" });
   }
 };

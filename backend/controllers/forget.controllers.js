@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import pool from "../config/db.js";
 
 export const forgotPassword = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { email } = req.body;
 
@@ -33,7 +34,8 @@ export const forgotPassword = async (req, res) => {
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await pool.query(
+    await client.query("BEGIN");
+    await client.query(
       `
             DELETE FROM PASSWORD_RESET
             WHERE email = $1
@@ -41,7 +43,7 @@ export const forgotPassword = async (req, res) => {
       [email],
     );
 
-    await pool.query(
+    await client.query(
       `
     INSERT INTO PASSWORD_RESET
     (
@@ -54,6 +56,8 @@ export const forgotPassword = async (req, res) => {
   `,
       [email, otpHash, result.rows[0].role, expiresAt],
     );
+
+    await client.query("COMMIT");
 
     // ==========================
     // 10. Send OTP email
@@ -86,9 +90,9 @@ please ignore this email.
       success: true,
 
       message: "OTP has been sent to your email",
-      otp: `${otp}`,
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Forgot password error:", error);
 
     return res.status(500).json({
@@ -96,10 +100,14 @@ please ignore this email.
 
       message: "Something went wrong",
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
 export const verifyOTP = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { email, otp } = req.body;
 
@@ -110,7 +118,8 @@ export const verifyOTP = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const result = await client.query(
       `
             SELECT *
             FROM PASSWORD_RESET
@@ -161,7 +170,7 @@ export const verifyOTP = async (req, res) => {
     // 7. Mark OTP verified
     // ==========================
 
-    await pool.query(
+    await client.query(
       `
             UPDATE PASSWORD_RESET
             SET verified = TRUE
@@ -174,12 +183,14 @@ export const verifyOTP = async (req, res) => {
     // 8. Success
     // ==========================
 
+    await client.query("COMMIT");
     return res.status(200).json({
       success: true,
 
       message: "OTP verified successfully",
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Verify OTP error:", error);
 
     return res.status(500).json({
@@ -187,10 +198,14 @@ export const verifyOTP = async (req, res) => {
 
       message: "Something went wrong",
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
 export const resetPassword = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { email, newPassword } = req.body;
 
@@ -208,7 +223,8 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    const resetResult = await pool.query(
+    await client.query("BEGIN");
+    const resetResult = await client.query(
       `
             SELECT *
             FROM PASSWORD_RESET
@@ -238,7 +254,7 @@ export const resetPassword = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    const updateResult = await pool.query(
+    const updateResult = await client.query(
       `
             UPDATE CUSTOMER
             SET hashed_password = $1
@@ -254,7 +270,7 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    await pool.query(
+    await client.query(
       `
             DELETE FROM PASSWORD_RESET
             WHERE id = $1
@@ -262,12 +278,14 @@ export const resetPassword = async (req, res) => {
       [resetRequest.id],
     );
 
+    await client.query("COMMIT");
     return res.status(200).json({
       success: true,
 
       message: "Password reset successfully",
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Reset password error:", error);
 
     return res.status(500).json({
@@ -275,5 +293,8 @@ export const resetPassword = async (req, res) => {
 
       message: "Something went wrong",
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };

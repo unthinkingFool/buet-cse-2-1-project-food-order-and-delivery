@@ -43,6 +43,7 @@ export const getCurrentUser = async (req, res) => {
 };
 
 export const updateUserLocation = async (req, res) => {
+  const client = await pool.connect();
   try {
     const id = req.id;
 
@@ -71,7 +72,8 @@ export const updateUserLocation = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    await client.query("BEGIN");
+    const result = await client.query(
       `UPDATE CUSTOMER
    SET
      latitude = $1::numeric,
@@ -94,21 +96,28 @@ export const updateUserLocation = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
         message: "User not found",
       });
     }
+
+    await client.query("COMMIT");
 
     return res.status(200).json({
       message: "Location updated successfully",
       location: result.rows[0],
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("UPDATE LOCATION ERROR:", error);
 
     return res.status(500).json({
       message: `error while updating location: ${error.message}`,
     });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 
@@ -183,7 +192,8 @@ export const getMyReceivedOrders = async (req, res) => {
               'item_image', i.image_link,
               'price', oi.price,
               'quantity', oi.quantity,
-              'item_total', oi.price * oi.quantity
+              'item_total', oi.price * oi.quantity,
+              'my_rating', review.rating
             )
           ) FILTER (WHERE oi.id IS NOT NULL),
           '[]'
@@ -206,6 +216,10 @@ export const getMyReceivedOrders = async (req, res) => {
 
       LEFT JOIN ITEM i
         ON oi.item_id = i.id
+
+      LEFT JOIN REVIEW review
+        ON review.order_item_id = oi.id
+       AND review.customer_id = $1
 
       WHERE fo.customer_id = $1
         AND so.status = 'delivered'
@@ -255,6 +269,72 @@ export const getMyReceivedOrders = async (req, res) => {
     return res.status(500).json({
       message: "Error while fetching received orders",
     });
+  }
+};
+
+export const getMyDeliveryCompletionNotifications = async (req, res) => {
+  try {
+    if (req.role !== "customer") {
+      return res.status(403).json({ message: "Only customers can view delivery notifications" });
+    }
+
+    const result = await pool.query(
+      `SELECT id, title, message, reference_id, created_at
+       FROM NOTIFICATION
+       WHERE recipient_id = $1
+         AND recipient_role = 'customer'
+         AND type = 'delivery_completed'
+         AND is_read = FALSE
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [req.id],
+    );
+
+    return res.status(200).json({ notifications: result.rows });
+  } catch (error) {
+    console.error("GET DELIVERY NOTIFICATIONS ERROR:", error);
+    return res.status(500).json({ message: "Could not fetch delivery notifications" });
+  }
+};
+
+export const markDeliveryNotificationRead = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    if (req.role !== "customer") {
+      return res.status(403).json({ message: "Only customers can update delivery notifications" });
+    }
+
+    const { notification_id } = req.body;
+    if (!notification_id) {
+      return res.status(400).json({ message: "notification_id is required" });
+    }
+
+    await client.query("BEGIN");
+    const result = await client.query(
+      `UPDATE NOTIFICATION
+       SET is_read = TRUE
+       WHERE id = $1
+         AND recipient_id = $2
+         AND recipient_role = 'customer'
+         AND type = 'delivery_completed'
+         AND is_read = FALSE
+       RETURNING id`,
+      [notification_id, req.id],
+    );
+    await client.query("COMMIT");
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Unread delivery notification not found" });
+    }
+
+    return res.status(200).json({ message: "Notification marked as read" });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("MARK DELIVERY NOTIFICATION READ ERROR:", error);
+    return res.status(500).json({ message: "Could not update delivery notification" });
+  } finally {
+    await client.query("ROLLBACK").catch(() => {});
+    client.release();
   }
 };
 

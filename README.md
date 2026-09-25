@@ -6,7 +6,7 @@ KhaiDai is a full-stack food ordering and delivery platform developed as a datab
 
 The system models a complete food-delivery ecosystem involving **customers, restaurant owners, riders, administrators, restaurants, menu items, orders, delivery assignments, payments, reviews, notifications, issue reports, authentication, and geospatial rider tracking**.
 
-The project was developed primarily by **Swapnil Das**, covering the frontend, backend application development, system integration, and database setup, with **Nazmul Hasan Rafi** contributing substantially to the database design and implementation.
+The project was developed primarily by **Swapnil Das**, covering the frontend, backend application development, system design , system integration, security checks and database setup, with **Nazmul Hasan Rafi** contributing substantially to the database design and implementation.
 
 ---
 

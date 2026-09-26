@@ -757,6 +757,36 @@ export const updateOrderStatus = async (req, res) => {
 
     const shopOrder = shopOrderResult.rows[0];
 
+
+
+
+if (status === "cancelled") {
+  await client.query(
+    `
+    DELETE FROM SHOP_ORDER
+    WHERE id = $1
+    `,
+    [shop_order_id],
+  );
+
+  await client.query("COMMIT");
+
+  const io = req.app.get("io");
+
+  io.to(`user:${shopOrder.customer_id}`).emit("order_status_changed", {
+    order_id: shopOrder.order_id,
+    shop_order_id: shopOrder.id,
+    status: "cancelled",
+  });
+
+  return res.status(200).json({
+    message: "Order cancelled and deleted successfully",
+    shop_order_id: shopOrder.id,
+  });
+}
+
+
+
     // ============================================================
     // 2. Update SHOP_ORDER status
     // ============================================================
@@ -881,7 +911,6 @@ export const updateOrderStatus = async (req, res) => {
         // ========================================================
         // 7. Find FREE RIDERS within 1 KM
         //
-        // Rider = CUSTOMER where role = rider
         //
         // Free means:
         //
@@ -895,80 +924,9 @@ export const updateOrderStatus = async (req, res) => {
 
         const ridersResult = await client.query(
           `
-          SELECT
-            c.id,
-            c.name,
-            c.email,
-            c.contact_no,
-            c.latitude,
-            c.longitude,
-
-            ST_Distance(
-              c.location,
-              ST_SetSRID(
-                ST_MakePoint(
-                  r.longitude,
-                  r.latitude
-                ),
-                4326
-              )::geography
-            ) AS distance_from_restaurant
-
-          FROM CUSTOMER c
-
-          CROSS JOIN RESTAURANT r
-
-          WHERE c.role = 'rider'
-
-            AND r.id = $1
-
-            -- ====================================================
-            -- Rider must be within 1 KM of restaurant
-            -- ====================================================
-
-            AND ST_DWithin(
-              c.location,
-              ST_SetSRID(
-                ST_MakePoint(
-                  r.longitude,
-                  r.latitude
-                ),
-                4326
-              )::geography,
-              1000
-            )
-
-            -- ====================================================
-            -- Rider must not have an active SHOP_ORDER
-            -- ====================================================
-
-            AND NOT EXISTS (
-              SELECT 1
-              FROM SHOP_ORDER active_so
-
-              WHERE active_so.assigned_rider_id = c.id
-
-                AND active_so.status NOT IN (
-                  'delivered',
-                  'cancelled'
-                )
-            )
-
-            -- ====================================================
-            -- Rider must not have an active delivery assignment
-            -- ====================================================
-
-            AND NOT EXISTS (
-              SELECT 1
-              FROM SHOP_ORDER_DELIVERY_ASSIGNMENT active_da
-
-              WHERE active_da.assigned_to = c.id
-
-                AND active_da.assignment_status = 'assigned'
-            )
-
-          ORDER BY distance_from_restaurant ASC
-          `,
+  SELECT *
+  FROM get_nearby_available_riders($1, 1000)
+  `,
           [shopOrder.restaurant_id],
         );
 

@@ -117,6 +117,39 @@ export const createOrEditRestaurant = async (req, res) => {
   }
 };
 
+export const getIfSuspended = async (req, res) => {
+  try {
+    const owner_id = req.id;
+
+    const result = await pool.query(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM SUSPENED_EMAILS s
+        JOIN CUSTOMER c
+          ON c.email = s.email
+        WHERE c.id = $1
+          AND c.role = 'owner'
+          AND s.role = 'owner'
+      ) AS is_suspended
+      `,
+      [owner_id],
+    );
+
+    return res.status(200).json({
+      success: true,
+      isSuspended: result.rows[0].is_suspended,
+    });
+  } catch (error) {
+    console.error("GET RESTAURANT SUSPENSION STATUS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error while checking restaurant suspension status",
+    });
+  }
+};
+
 export const toggleRestaurantStatus = async (req, res) => {
   const client = await pool.connect();
   try {

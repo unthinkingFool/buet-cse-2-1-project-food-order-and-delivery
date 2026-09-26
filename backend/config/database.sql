@@ -557,6 +557,28 @@ CREATE TABLE ISSUES (
     CHECK (sent_from_id <> issue_against_id)
 );
 
+CREATE TABLE AUDIT_LOG (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(100) NOT NULL,
+    operation VARCHAR(10) NOT NULL,
+    record_id INTEGER,
+    description TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE IF NOT EXISTS SHOP_ORDER_STATUS_HISTORY (
+    id              SERIAL PRIMARY KEY,
+    shop_order_id   INTEGER NOT NULL
+                    REFERENCES SHOP_ORDER(id)
+                    ON DELETE CASCADE,
+    old_status      order_status_enum NOT NULL,
+    new_status      order_status_enum NOT NULL,
+    changed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
 -- CSE216 database features: audit trigger, computed statistics, and delivery workflow.
 
 

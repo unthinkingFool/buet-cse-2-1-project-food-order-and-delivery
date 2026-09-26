@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createOrEditRestaurant,
+  getIfSuspended,
   getItemsByCity,
   getItemsByRestaurant,
   getMyCompletedOrders,
@@ -24,6 +25,7 @@ shopRouter.get("/get-my", isAuth, getMyRestaurant);
 shopRouter.get("/my-items", isAuth, getMyItems);
 shopRouter.get("/get-by-city/:city", isAuth, getRestaurantByCity);
 shopRouter.get("/items-city/:city", isAuth, getItemsByCity);
+shopRouter.get("/is-suspended", isAuth, getIfSuspended);
 shopRouter.get("/completed-orders", isAuth, getMyCompletedOrders);
 shopRouter.get("/statistics", isAuth, getRestaurantDeliveryStatistics);
 shopRouter.patch("/toggle-status", isAuth, toggleRestaurantStatus);

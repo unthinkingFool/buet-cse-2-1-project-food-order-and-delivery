@@ -8,6 +8,13 @@ export const signup = async (req, res) => {
   try {
     const { name, email, password, contact_no, role } = req.body;
 
+
+    if (!email || !email.toLowerCase().endsWith("@gmail.com")) {
+      return res.status(400).json({
+        message: "Email must be a valid Gmail address",
+      });
+    }
+
     // ============================================================
     // CHECK WHETHER EMAIL IS SUSPENDED
     // ============================================================

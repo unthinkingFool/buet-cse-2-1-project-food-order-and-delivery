@@ -12,9 +12,10 @@ const userSlice = createSlice({
     totalAmount: 0,
     myOrders: [],
     receivedOrders: [],
-    searchItems:null,
-    socket:null,
+    searchItems: null,
+    socket: null,
     myIssues: [],
+    isSuspended: null,
   },
   reducers: {
     setUserData: (state, action) => {
@@ -95,11 +96,11 @@ const userSlice = createSlice({
     setReceivedOrders: (state, action) => {
       state.receivedOrders = action.payload;
     },
-    setSearchItems: (state,action)=>{
-      state.searchItems=action.payload;
+    setSearchItems: (state, action) => {
+      state.searchItems = action.payload;
     },
-    setSocket: (state,action)=>{
-      state.socket=action.payload;
+    setSocket: (state, action) => {
+      state.socket = action.payload;
     },
 
     setMyIssues: (state, action) => {
@@ -107,10 +108,10 @@ const userSlice = createSlice({
     },
 
     addMyIssue: (state, action) => {
-      state.myIssues = [
-        action.payload,
-        ...state.myIssues,
-      ];
+      state.myIssues = [action.payload, ...state.myIssues];
+    },
+    setIsSuspended: (state, action) => {
+      state.isSuspended = action.payload;
     },
   },
 });
@@ -132,6 +133,7 @@ export const {
   setSearchItems,
   setSocket,
   setMyIssues,
-  addMyIssue
+  addMyIssue,
+  setIsSuspended
 } = userSlice.actions;
 export default userSlice.reducer;

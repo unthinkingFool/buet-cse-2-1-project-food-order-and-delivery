@@ -175,33 +175,7 @@ function AdminCustomers() {
           <p className="text-2xl font-black text-[#1F2023]">{customers.length}</p>
         </div>
 
-        <div
-          style={{ boxShadow: "3px 3px 0px 0px #1F2023" }}
-          className="border-2 border-[#1F2023] bg-white p-5"
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Active</span>
-            <UserCheck size={19} className="text-green-600" />
-          </div>
-          <p className="text-2xl font-black text-[#1F2023]">
-            {customers.filter((customer) => !customer.is_suspended).length}
-          </p>
-        </div>
-
-        <div
-          style={{ boxShadow: "3px 3px 0px 0px #1F2023" }}
-          className="border-2 border-[#1F2023] bg-white p-5"
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
-              Suspended
-            </span>
-            <UserX size={19} className="text-red-600" />
-          </div>
-          <p className="text-2xl font-black text-[#1F2023]">
-            {customers.filter((customer) => customer.is_suspended).length}
-          </p>
-        </div>
+        
       </motion.div>
 
       {/* ====================================================== */}

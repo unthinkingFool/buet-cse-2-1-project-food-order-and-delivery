@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 
 import Nav from "./Nav.jsx";
 import useMyItems from "../hooks/useMyItems.jsx";
+import useGetIfSuspended from "../hooks/useGetIfSuspended.jsx";
+import SuspendedRestaurant from "./SuspendedRestaurant.jsx";
 
 import axios from "axios";
 import { serverUrl } from "../App";
@@ -27,13 +29,16 @@ import {
   Wallet,
 } from "lucide-react";
 
+
 function OwnerDashboard() {
   const { restaurantData, items } = useSelector((state) => state.owner);
+  const { isSuspended } = useSelector((state) => state.user);
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
   useMyItems();
+  useGetIfSuspended();
 
   // UI-only addition (does not affect the request/logic itself)
   const [deletingId, setdeletingId] = useState(null);
@@ -152,6 +157,10 @@ function OwnerDashboard() {
     }),
   };
 
+  if (isSuspended === true) {
+    return <SuspendedRestaurant />;
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
       <Nav />
@@ -252,7 +261,7 @@ function OwnerDashboard() {
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatisticCard label="Total orders" value={statistics.total_shop_orders} icon={BarChart3} />
                   <StatisticCard label="Delivered" value={statistics.delivered_orders} icon={CheckCircle2} />
-                  <StatisticCard label="Cancelled" value={statistics.cancelled_orders} icon={XCircle} />
+                  {/* <StatisticCard label="Cancelled" value={statistics.cancelled_orders} icon={XCircle} /> */}
                   <StatisticCard label="Delivered revenue" value={`৳${statistics.delivered_revenue}`} icon={Wallet} />
                 </div>
               )}

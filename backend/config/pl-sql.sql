@@ -1,5 +1,4 @@
--- Run this file once on an existing database after database.sql has been applied.
--- It is safe to run more than once.
+
 
 CREATE TABLE IF NOT EXISTS SHOP_ORDER_STATUS_HISTORY (
     id              SERIAL PRIMARY KEY,
@@ -24,9 +23,7 @@ BEGIN
 END;
 $$;
 
--- Keep stored item and restaurant ratings consistent when a review is created.
--- Existing databases may have old reviews, so this new column starts nullable.
--- New reviews always supply it through the API.
+
 ALTER TABLE REVIEW
 ADD COLUMN IF NOT EXISTS order_item_id INTEGER REFERENCES ORDER_ITEM(id);
 

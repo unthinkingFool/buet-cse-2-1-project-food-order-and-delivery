@@ -4,14 +4,8 @@ import uploadOnCloudinary from "../utils/cloudinary.js";
 export const addItem = async (req, res) => {
   const client = await pool.connect();
   try {
-    const {
-      name,
-      category,
-      food_type,
-      description,
-      price,
-      discount_price,
-    } = req.body;
+    const { name, category, food_type, description, price, discount_price } =
+      req.body;
 
     const owner_id = req.id;
 
@@ -89,14 +83,8 @@ export const addItem = async (req, res) => {
 export const editItem = async (req, res) => {
   const client = await pool.connect();
   try {
-    const {
-      name,
-      category,
-      food_type,
-      description,
-      price,
-      discount_price,
-    } = req.body;
+    const { name, category, food_type, description, price, discount_price } =
+      req.body;
 
     const itemId = req.params.itemId;
     const owner_id = req.id;
@@ -404,7 +392,7 @@ export const searchItems = async (req, res) => {
         i.rating DESC NULLS LAST,
         i.name ASC
       `,
-      [searchQuery, city.trim()]
+      [searchQuery, city.trim()],
     );
 
     return res.status(200).json({
@@ -413,7 +401,6 @@ export const searchItems = async (req, res) => {
       count: result.rows.length,
       items: result.rows,
     });
-
   } catch (error) {
     console.error("SEARCH ITEMS ERROR:", error);
 
@@ -437,33 +424,32 @@ export const getItemTotalSold = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    const itemResult = await pool.query(
       `
-      SELECT
-        i.id AS item_id,
-        COALESCE(SUM(oi.quantity), 0)::INTEGER AS total_sold
-      FROM ITEM i
-      LEFT JOIN ORDER_ITEM oi
-        ON i.id = oi.item_id
-      LEFT JOIN SHOP_ORDER so
-        ON oi.shop_order_id = so.id
-        AND so.status = 'delivered'
-      WHERE i.id = $1
-      GROUP BY i.id
+      SELECT id AS item_id
+      FROM ITEM
+      WHERE id = $1
       `,
-      [itemId]
+      [itemId],
     );
 
-    if (result.rows.length === 0) {
+    if (itemResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: "Item not found",
       });
     }
 
+    const result = await pool.query(
+      `
+      SELECT get_item_total_sold($1) AS total_sold
+      `,
+      [itemId],
+    );
+
     return res.status(200).json({
       success: true,
-      item_id: result.rows[0].item_id,
+      item_id: itemResult.rows[0].item_id,
       total_sold: result.rows[0].total_sold,
     });
   } catch (error) {
@@ -476,6 +462,8 @@ export const getItemTotalSold = async (req, res) => {
     });
   }
 };
+
+
 
 export const rating = async (req, res) => {
   const client = await pool.connect();
@@ -496,7 +484,11 @@ export const rating = async (req, res) => {
       });
     }
 
-    if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) {
+    if (
+      !Number.isInteger(Number(rating)) ||
+      Number(rating) < 1 ||
+      Number(rating) > 5
+    ) {
       return res.status(400).json({
         success: false,
         message: "Rating must be between 1 and 5",
@@ -544,13 +536,9 @@ export const rating = async (req, res) => {
       message: "Rating submitted successfully",
       review: result.rows[0],
     });
-
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
-    console.log(
-      "error while handling rating in the backend : ",
-      error
-    );
+    console.log("error while handling rating in the backend : ", error);
 
     if (error.code === "23505") {
       return res.status(409).json({

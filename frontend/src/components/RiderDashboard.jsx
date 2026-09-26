@@ -500,7 +500,7 @@ function RiderDashboard() {
               <RiderStatistic label="Completed" value={statistics.completed_deliveries} icon={CheckCircle2} />
               <RiderStatistic label="Active" value={statistics.active_deliveries} icon={Clock3} />
               <RiderStatistic label="Delivered value" value={`৳${statistics.delivered_order_value}`} icon={Wallet} />
-              <RiderStatistic label="Average value" value={`৳${statistics.average_delivered_order_value}`} icon={BarChart3} />
+              {/* <RiderStatistic label="Average value" value={`৳${statistics.average_delivered_order_value}`} icon={BarChart3} /> */}
             </div>
           </motion.section>
         )}

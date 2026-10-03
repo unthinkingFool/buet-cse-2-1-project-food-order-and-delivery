@@ -92,16 +92,6 @@ EXECUTE FUNCTION sync_customer_location();
 -- 3. SHOP ORDER STATUS AUDIT
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS SHOP_ORDER_STATUS_HISTORY (
-    id              SERIAL PRIMARY KEY,
-    shop_order_id   INTEGER NOT NULL
-                    REFERENCES SHOP_ORDER(id)
-                    ON DELETE CASCADE,
-    old_status      order_status_enum NOT NULL,
-    new_status      order_status_enum NOT NULL,
-    changed_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE OR REPLACE FUNCTION log_shop_order_status_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -196,9 +186,6 @@ EXECUTE FUNCTION maintain_item_total_sold();
 -- Keeps ITEM.rating, ITEM.rating_count and RESTAURANT.rating
 -- synchronized for INSERT / UPDATE / DELETE of reviews.
 -- ============================================================
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_review_customer_order_item
-ON REVIEW (customer_id, order_item_id);
 
 
 CREATE OR REPLACE FUNCTION refresh_rating_summaries()
@@ -623,28 +610,7 @@ END;
 $$;
 
 
--- ============================================================
--- 13. CONCURRENCY INDEXES USED BY RIDER ASSIGNMENT
--- ============================================================
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_active_delivery_assignment_per_shop_order
-ON SHOP_ORDER_DELIVERY_ASSIGNMENT (shop_order_id)
-WHERE assignment_status IN ('broadcasted', 'assigned');
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_active_delivery_assignment_per_rider
-ON SHOP_ORDER_DELIVERY_ASSIGNMENT (assigned_to)
-WHERE assigned_to IS NOT NULL
-  AND assignment_status = 'assigned';
-
-CREATE INDEX IF NOT EXISTS idx_shop_order_active_rider
-ON SHOP_ORDER (assigned_rider_id)
-WHERE assigned_rider_id IS NOT NULL
-  AND status NOT IN ('delivered', 'cancelled');
-
-CREATE INDEX IF NOT EXISTS idx_delivery_assignment_active_rider
-ON SHOP_ORDER_DELIVERY_ASSIGNMENT (assigned_to)
-WHERE assigned_to IS NOT NULL
-  AND assignment_status = 'assigned';
 
 -- ============================================================
 --  VALIDATE GMAIL IN DATABASE LEVEL TRIGGER
@@ -768,6 +734,28 @@ CREATE TRIGGER trg_audit_issue
 AFTER INSERT OR UPDATE OR DELETE ON ISSUES
 FOR EACH ROW
 EXECUTE FUNCTION log_table_change();
+
+
+
+
+
+
+CREATE TRIGGER trg_log_shop_order_status_change
+AFTER UPDATE OF status ON SHOP_ORDER
+FOR EACH ROW EXECUTE FUNCTION log_shop_order_status_change();
+
+CREATE OR REPLACE FUNCTION get_restaurant_delivery_statistics(p_restaurant_id INTEGER)
+RETURNS TABLE (
+    total_shop_orders BIGINT, delivered_orders BIGINT, cancelled_orders BIGINT,
+    delivered_revenue NUMERIC, average_delivered_order_value NUMERIC
+) LANGUAGE sql STABLE AS $$
+    SELECT COUNT(*),
+           COUNT(*) FILTER (WHERE status = 'delivered'),
+           COUNT(*) FILTER (WHERE status = 'cancelled'),
+           COALESCE(SUM(subtotal) FILTER (WHERE status = 'delivered'), 0),
+           ROUND(COALESCE(AVG(subtotal) FILTER (WHERE status = 'delivered'), 0), 2)
+    FROM SHOP_ORDER WHERE restaurant_id = p_restaurant_id;
+$$;
 
 
 -- End of KhaiDai database business logic migration.

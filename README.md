@@ -1,1689 +1,420 @@
-# KhaiDai — Food Ordering & Delivery Platform
+# 🍔 KhaiDai — A Database-Driven Food Ordering & Real-Time Delivery Platform
 
-> **BUET CSE 2-1 Database Management Sessional Project**
+> Four-role marketplace (customer · restaurant owner · rider · admin) where **PostgreSQL + PostGIS enforces the business rules** and the application layer orchestrates them. Built at BUET CSE (2-1, Database Sessional) and still being extended.
 
-KhaiDai is a full-stack food ordering and delivery platform developed as a database-management sessional project for the **Department of Computer Science and Engineering, Bangladesh University of Engineering and Technology (BUET)**.
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](#tech-stack)
+[![Node](https://img.shields.io/badge/Node.js-Express_5-339933?logo=node.js&logoColor=white)](#tech-stack)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-PostGIS-4169E1?logo=postgresql&logoColor=white)](#database-design)
+[![Socket.IO](https://img.shields.io/badge/Socket.IO-realtime-010101?logo=socket.io&logoColor=white)](#real-time-layer)
 
-The system models a complete food-delivery ecosystem involving **customers, restaurant owners, riders, administrators, restaurants, menu items, orders, delivery assignments, payments, reviews, notifications, issue reports, authentication, and geospatial rider tracking**.
+**Demo video:** _coming soon (Loom)_ · **Repo:** [unthinkingFool/buet-cse-2-1-project-food-order-and-delivery](https://github.com/unthinkingFool/buet-cse-2-1-project-food-order-and-delivery)
 
-The project was developed primarily by **Swapnil Das**, covering the frontend, backend application development, system design , system integration, security checks and database setup, with **Nazmul Hasan Rafi** contributing substantially to the database design and implementation.
-
----
-
-## ✨ Features
-
-### Customer
-- User registration and authentication
-- Role-based account creation for customer, restaurant owner, and rider
-- Secure password hashing with `bcrypt`
-- JWT-based session authentication using HTTP cookies
-- Password-reset workflow using OTP verification
-- Automatic location acquisition through browser geolocation
-- City-based restaurant and food discovery
-- Restaurant browsing and menu inspection
-- Food-item search
-- Shopping cart management
-- Multi-restaurant order creation
-- Cash-on-delivery and online-payment order flows
-- SSLCommerz payment initialization
-- Order history and order tracking
-- Real-time rider-location updates
-- Delivery completion notifications
-- Food-item reviews and ratings
-- Issue/complaint reporting
-
-### Restaurant Owner
-- Restaurant creation and editing
-- Restaurant image upload
-- Restaurant open/closed status management
-- Food-item CRUD operations
-- Food-item image upload
-- Item availability control
-- Order management
-- Order-status transitions
-- Completed-order history
-- Restaurant delivery statistics
-- Item sales statistics
-- Customer review/rating aggregation
-
-### Rider
-- Rider authentication
-- Online/offline presence tracking
-- Continuous geolocation updates
-- Discovery of nearby broadcasted delivery jobs
-- Delivery-job acceptance
-- Assigned-order management
-- Delivered-order history
-- Rider delivery statistics
-- Delivery OTP generation and verification
-- Real-time delivery tracking
-
-### Administrator
-- Dedicated administrator authentication
-- Dashboard statistics
-- Restaurant approval/rejection
-- Restaurant suspension/unsuspension
-- Customer/owner/rider inspection
-- User suspension/unsuspension
-- Pending and suspended restaurant views
-- Order inspection
-- Issue/complaint inspection
-- Protected admin routes
-
-### Database / Backend
-- PostgreSQL relational database
-- PostGIS geospatial support
-- Foreign-key referential integrity
-- `ON DELETE CASCADE` relationships where appropriate
-- Enumerated domain types
-- Database-level `CHECK` constraints
-- Partial unique indexes for delivery-assignment invariants
-- GIST spatial index for customer locations
-- Order-status audit history
-- Database triggers for rating aggregation and status history
-- PostgreSQL functions for delivery statistics
-- PostgreSQL procedure for transactional delivery completion
-- Transactional order and delivery operations
+<!-- Add 3–4 screenshots/GIFs here: customer home, owner order board, rider live map, admin dashboard. -->
 
 ---
 
-## 🏗️ System Architecture
+## TL;DR — what this project demonstrates
 
-KhaiDai follows a layered full-stack architecture:
+| Skill area | Evidence in this repo |
+|---|---|
+| **Relational modeling** | 19 tables, 8 enum types, one checkout decomposed into per-restaurant sub-orders (`FOOD_ORDER → SHOP_ORDER → ORDER_ITEM`) with price snapshots |
+| **Concurrency control** | Three-layer protection on rider acceptance: advisory lock → `SELECT … FOR UPDATE` → partial unique indexes ([details](#concurrency--race-condition-handling)) |
+| **Database-enforced business logic** | 22 triggers, 4 query functions, 1 PL/pgSQL procedure: audit history, rating aggregation, review-purchase validation, role validation, cached counters |
+| **Geospatial engineering** | PostGIS `geography` + GiST index + `ST_DWithin` rider discovery inside a SQL function; trigger keeps scalar lat/long and the geography point consistent |
+| **Real-time systems** | Socket.IO rooms per user, live rider tracking on Leaflet maps, persisted notifications so offers survive disconnects |
+| **Security** | bcrypt (cost 12), HTTP-only `SameSite=strict` JWT cookies, role re-read from the DB on every request, per-request suspension check, hashed expiring single-use delivery OTP, parameterized SQL only |
+| **Full-stack delivery** | ~69 REST endpoints, 4 role-specific dashboards, ~8.5k lines of React, ~7.8k lines of backend JS, ~1.5k lines of SQL |
+
+---
+
+## Table of contents
+
+1. [Features by role](#features-by-role)
+2. [Architecture](#architecture)
+3. [Hard design decisions](#hard-design-decisions-and-trade-offs)
+4. [Database design](#database-design)
+5. [Concurrency & race-condition handling](#concurrency--race-condition-handling)
+6. [Business logic](#business-logic)
+7. [Database optimization](#database-optimization)
+8. [Real-time layer](#real-time-layer)
+9. [Security](#security)
+10. [Known limitations & roadmap](#known-limitations--roadmap)
+11. [Getting started](#getting-started)
+12. [API overview](#api-overview)
+13. [Project structure](#project-structure)
+14. [Credits](#credits)
+
+---
+
+## Features by role
+
+**Customer** — location-aware city discovery, food search with relevance ranking, multi-restaurant cart, COD or online checkout, live order tracking with rider position on a map, delivery OTP, item reviews, issue reporting.
+
+**Restaurant owner** — restaurant onboarding (admin-approved), menu CRUD with Cloudinary images, availability and open/closed toggles, order board with status transitions, sales and delivery statistics.
+
+**Rider** — online presence, continuous geolocation streaming, nearby delivery offers, one-tap accept (race-safe), OTP-verified delivery completion, delivery statistics.
+
+**Admin** — separate auth domain; restaurant approve/reject/suspend, user suspension, platform dashboard, order and issue inspection.
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TB
-    U[Customer / Owner / Rider / Admin]
-    FE[React Frontend<br/>Vite + Redux + React Router]
-    HTTP[HTTP / REST API]
-    WS[Socket.IO]
-    BE[Express Backend]
-    AUTH[Authentication & Authorization<br/>JWT + HTTP Cookies]
-    CTRL[Controllers / Business Logic]
-    DB[(PostgreSQL + PostGIS)]
-    CLOUD[Cloudinary]
-    MAIL[Nodemailer / Gmail SMTP]
-    PAY[SSLCommerz]
-    GEO[Browser Geolocation]
-
-    U --> FE
-    FE --> HTTP
-    FE --> WS
-    GEO --> FE
-
-    HTTP --> BE
-    WS --> BE
-
-    BE --> AUTH
-    BE --> CTRL
-    CTRL --> DB
-    CTRL --> CLOUD
-    CTRL --> MAIL
-    CTRL --> PAY
-
-    WS --> DB
+    subgraph Client
+      FE["React 19 + Vite + Redux Toolkit<br/>Leaflet maps · Tailwind"]
+    end
+    subgraph Server
+      API["Express 5 REST API"]
+      WS["Socket.IO"]
+      MW["Auth middleware<br/>JWT cookie → DB role + suspension check"]
+    end
+    subgraph Data
+      PG[("PostgreSQL + PostGIS<br/>constraints · triggers · functions · procedure")]
+    end
+    FE -->|HTTPS/JSON| API
+    FE <-->|WebSocket| WS
+    API --> MW --> PG
+    WS --> PG
+    API --> CLD[Cloudinary]
+    API --> MAIL[SMTP / Nodemailer]
+    API --> PAY[SSLCommerz]
 ```
 
-### Backend request lifecycle
-
-```text
-Client
-  │
-  ▼
-Express Router
-  │
-  ├── Authentication middleware
-  │      └── JWT verification / suspension check
-  │
-  ├── Admin middleware
-  │      └── Admin JWT verification
-  │
-  ▼
-Controller
-  │
-  ├── Validation
-  ├── Authorization
-  ├── Business rules
-  ├── Transaction management
-  │
-  ▼
-PostgreSQL / PostGIS
-  │
-  ├── Relational queries
-  ├── Spatial queries
-  ├── Constraints
-  ├── Triggers
-  ├── Functions
-  └── Procedures
-```
-
-### Frontend architecture
-
-```text
-React Pages
-    │
-    ├── Components
-    ├── Custom Hooks
-    ├── Redux Store
-    │     ├── userSlice
-    │     ├── ownerSlice
-    │     ├── riderSlice
-    │     ├── adminSlice
-    │     └── mapSlice
-    │
-    └── Axios / Socket.IO Client
-             │
-             ▼
-        Express REST API
-        + Socket.IO
-```
+**Request path:** router → `isAuth` / `adminAuth` → controller (validation, authorization, orchestration) → transaction on a pooled client → DB (constraints, triggers, functions) → `COMMIT` → Socket.IO emit. Events are emitted **after commit**, so clients never hear about state that later rolls back.
 
 ---
 
-## 🛠️ Tech Stack
+## Hard design decisions and trade-offs
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19 |
-| Build Tool | Vite |
-| Styling | Tailwind CSS |
-| UI / Icons | Lucide React, React Icons |
-| Animation | Framer Motion |
-| State Management | Redux Toolkit / Redux |
-| Routing | React Router |
-| HTTP Client | Axios |
-| Maps | Leaflet, React Leaflet |
-| Real-Time Client | Socket.IO Client |
-| Backend | Node.js |
-| API Framework | Express 5 |
-| Authentication | JWT + HTTP-only cookies |
-| Password Security | bcrypt |
-| Database | PostgreSQL |
-| Spatial Database | PostGIS |
-| Database Driver | node-postgres (`pg`) |
-| Real-Time Server | Socket.IO |
-| File Upload | Multer |
-| Image Storage | Cloudinary |
-| Email | Nodemailer + Gmail SMTP |
-| Payment Gateway | SSLCommerz |
-| Configuration | dotenv |
+Each of these was a deliberate choice with a cost.
 
----
+**1. One checkout, many restaurants → `FOOD_ORDER` + `SHOP_ORDER`.**
+A customer can order from several restaurants at once, but each restaurant prepares, cancels and hands off independently. Modeling a single order would force awkward partial states, so the customer-facing order and the restaurant-facing order are separate entities. *Cost:* extra joins and a two-level status story.
 
-## 📁 Project Structure
+**2. Riders are `CUSTOMER` rows with `role = 'rider'`, not a separate table.**
+One identity, one auth path, one location column. A trigger (`validate_assigned_rider`) guarantees an assignment can only point at a real rider. *Cost:* a wide user table, and role checks must be enforced, not assumed.
 
-```text
-buet-cse-2-1-project-food-order-and-delivery-main/
-│
-├── backend/
-│   ├── config/
-│   │   ├── database.sql
-│   │   ├── checklist_features.sql
-│   │   ├── concurrency_hardening.sql
-│   │   ├── db.js
-│   │   ├── mail.js
-│   │   └── generateAdminPassword.js
-│   │
-│   ├── controllers/
-│   │   ├── admin.controllers.js
-│   │   ├── auth.controllers.js
-│   │   ├── delivery.controllers.js
-│   │   ├── deliveryOtp.controllers.js
-│   │   ├── forget.controllers.js
-│   │   ├── issues.controllers.js
-│   │   ├── item.controllers.js
-│   │   ├── order.controllers.js
-│   │   ├── payment.controllers.js
-│   │   ├── restaurant.controllers.js
-│   │   ├── rider.controllers.js
-│   │   └── user.controllers.js
-│   │
-│   ├── middlewares/
-│   │   ├── adminAuth.js
-│   │   ├── isAuth.js
-│   │   └── multer.js
-│   │
-│   ├── routes/
-│   │   ├── admin.routes.js
-│   │   ├── auth.routes.js
-│   │   ├── delivery.routes.js
-│   │   ├── issues.routes.js
-│   │   ├── item.routes.js
-│   │   ├── order.routes.js
-│   │   ├── payment.routes.js
-│   │   ├── restaurant.routes.js
-│   │   ├── rider.routes.js
-│   │   └── user.routes.js
-│   │
-│   ├── utils/
-│   │   ├── cloudinary.js
-│   │   ├── otp.js
-│   │   └── token.js
-│   │
-│   ├── index.js
-│   ├── socket.js
-│   └── package.json
-│
-├── frontend/
-│   ├── public/
-│   └── src/
-│       ├── assets/
-│       ├── components/
-│       ├── hooks/
-│       ├── pages/
-│       ├── redux/
-│       ├── App.jsx
-│       ├── Categories.js
-│       ├── index.css
-│       └── main.jsx
-│
-├── testDocs/
-│   ├── burger/
-│   ├── drink/
-│   ├── fries/
-│   ├── pizza/
-│   └── restaurant/
-│
-└── README.md
-```
+**3. Delivery *offer* and delivery *assignment* are different things.**
+`SHOP_ORDER_DELIVERY_ASSIGNMENT` tracks `broadcasted → assigned → completed`; `SHOP_ORDER_BROADCASTED_TO` records which riders were offered the job. Separating them lets the system prove a rider was actually eligible to accept and keeps completed assignments as history.
 
-### Backend directory responsibilities
+**4. Defense in depth for concurrency instead of trusting one mechanism.**
+App-level checks give friendly errors, row locks serialize the common case, the advisory lock closes the "lock the absence of a row" gap, and unique indexes make a bad state *unrepresentable* even if every other layer fails or another server instance is running.
 
-- **`routes/`** — HTTP endpoint definitions and middleware attachment.
-- **`controllers/`** — application logic, validation, authorization checks, database operations, and response construction.
-- **`middlewares/`** — reusable authentication, authorization, and upload middleware.
-- **`config/`** — database, mail, schema, and configuration utilities.
-- **`utils/`** — reusable JWT, OTP, and Cloudinary helpers.
-- **`socket.js`** — Socket.IO connection, identity registration, location updates, and disconnect handling.
+**5. Role is re-read from the database on every request.**
+JWTs prove identity, not current permission. Reading role and suspension status from PostgreSQL means a suspension or role change takes effect immediately instead of when a token expires. *Cost:* one extra query per request (cacheable later).
 
-### Frontend directory responsibilities
+**6. Prices are re-read from the DB and snapshotted into `ORDER_ITEM`.**
+The client sends item ids and quantities only. Totals are computed server-side, and the price at purchase time is stored, so later menu edits never rewrite order history.
 
-- **`pages/`** — route-level screens.
-- **`components/`** — reusable UI and dashboard components.
-- **`hooks/`** — API-facing custom hooks.
-- **`redux/`** — global application state.
-- **`assets/`** — static project assets.
+**7. PostGIS `geography(Point, 4326)` instead of hand-rolled Haversine.**
+Distances come back in meters, spatial predicates can use a GiST index, and the logic lives in one SQL function (`get_nearby_available_riders`). Socket updates write only the geography column while REST writes scalar lat/long, so a trigger (`sync_customer_location`) keeps both representations consistent.
+
+**8. Cached counters are trigger-maintained, with a ground-truth function beside them.**
+`ITEM.total_sold` is updated only when a shop order crosses the `delivered` boundary (and reverses if it leaves it). `get_item_total_sold()` recomputes from source rows, so the cache can always be verified.
+
+**9. Delivery completion is a stored procedure.**
+After the app verifies the OTP, `complete_delivery()` locks the order and, in one atomic step, completes the assignment, marks the order delivered (which fires the audit and counter triggers) and creates the customer notification.
+
+**10. Owners cannot mark an order `delivered`; riders can't either, without the customer's OTP.**
+Delivery proof is a hashed, 10-minute, single-use OTP emailed to the customer. Neither party can unilaterally close the loop.
+
+**11. No nearby rider ⇒ the order cannot go `out_for_delivery`.**
+This is an intentional business rule: an order never enters a state where nobody is able to pick it up. The status change rolls back and the order stays in `preparing`.
+
+**12. Business rules live in the database as well as the controllers.**
+Review validation (only the buyer, only delivered items, item must match) exists in a trigger even though the API checks it too, so direct SQL, scripts and future services can't bypass it.
 
 ---
 
-## 🔐 Authentication & Authorization
+## Database design
 
-KhaiDai uses two authentication domains.
+**PostgreSQL 14+ with PostGIS.** The database is an active participant: it enforces invariants, records history and computes aggregates.
 
-### User authentication
-
-Customers, restaurant owners, and riders authenticate through:
-
-```text
-POST /api/auth/signup
-POST /api/auth/signin
-GET  /api/auth/signout
-```
-
-After successful authentication:
-
-1. Credentials are validated.
-2. Passwords are verified using `bcrypt`.
-3. A JWT containing user identity and role is generated.
-4. The JWT is stored in an HTTP-only cookie.
-5. Protected endpoints use `isAuth` middleware.
-6. The middleware verifies the JWT and retrieves the authoritative role from PostgreSQL.
-7. Suspended users are rejected.
-
-### Admin authentication
-
-Administrators use a separate cookie:
-
-```text
-adminToken
-```
-
-Admin requests are protected by `adminAuth`, which:
-
-- verifies the JWT;
-- verifies that the token role is `admin`;
-- attaches administrator information to the request.
-
-### Password reset
-
-The password-reset process is:
-
-```text
-Request OTP
-    ↓
-OTP delivered through email
-    ↓
-Verify OTP
-    ↓
-Reset password
-```
-
-Reset state is persisted in the `PASSWORD_RESET` table with an OTP hash, expiry timestamp, role, and verification state.
-
----
-
-## 👥 User Roles & Permissions
-
-| Role | Main Responsibilities |
-|---|---|
-| Customer | Browse restaurants, manage cart, place orders, pay, track deliveries, review items, report issues |
-| Restaurant Owner | Manage restaurant/menu, process orders, update order states, inspect statistics |
-| Rider | Discover and accept deliveries, update location, complete deliveries using OTP |
-| Administrator | Moderate restaurants/users, inspect orders/issues, manage platform-level operations |
-
-The application stores these roles using PostgreSQL enum values:
-
-```text
-customer
-owner
-rider
-```
-
-Administrator authentication is maintained separately through the `ADMIN` table.
-
----
-
-## 🌐 API Routes
-
-All routes are prefixed by:
-
-```text
-http://localhost:<BACKEND_PORT>/api
-```
-
-Protected endpoints require the appropriate authentication cookie.
-
-### Authentication Routes
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/auth/signup` | Register a user |
-| POST | `/auth/signin` | Authenticate a user |
-| GET | `/auth/signout` | Clear user session |
-| POST | `/auth/send-otp` | Send password-reset OTP |
-| POST | `/auth/verify-otp` | Verify password-reset OTP |
-| POST | `/auth/reset-password` | Reset account password |
-
-### Customer Routes
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/user/current` | Retrieve current authenticated user |
-| PUT | `/user/location` | Update user location |
-| GET | `/user/received-orders` | Retrieve received orders |
-| GET | `/user/delivery-notifications` | Retrieve delivery notifications |
-| PATCH | `/user/delivery-notifications/read` | Mark delivery notifications as read |
-| POST | `/order/create` | Create a food order |
-| GET | `/order/orders` | Retrieve customer orders |
-| GET | `/order/shop-order/:shop_order_id` | Retrieve shop-order details |
-| POST | `/payment/initiate` | Initialize online payment |
-| POST | `/issues/report` | Submit an issue |
-| GET | `/issues/my-issues` | Retrieve own issues |
-
-### Restaurant/Owner Routes
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/restaurant/create-edit-restaurant` | Create/edit restaurant |
-| GET | `/restaurant/get-my` | Retrieve owner's restaurant |
-| GET | `/restaurant/my-items` | Retrieve owner's items |
-| GET | `/restaurant/get-by-city/:city` | Find restaurants by city |
-| GET | `/restaurant/items-city/:city` | Find food items by city |
-| GET | `/restaurant/completed-orders` | Retrieve completed restaurant orders |
-| GET | `/restaurant/statistics` | Retrieve restaurant delivery statistics |
-| PATCH | `/restaurant/toggle-status` | Open/close restaurant |
-| GET | `/restaurant/items/:restaurantId` | Retrieve restaurant menu |
-| POST | `/item/add-item` | Add menu item |
-| POST | `/item/edit-item/:itemId` | Edit menu item |
-| DELETE | `/item/delete-item/:itemId` | Delete menu item |
-| PATCH | `/item/toggle-availability/:item_id` | Toggle item availability |
-| GET | `/item/search-items` | Search food items |
-| GET | `/item/total-sold/:itemId` | Retrieve item sales count |
-| POST | `/item/rating` | Submit item rating/review |
-| PATCH | `/order/shop-order/status` | Update shop-order status |
-
-### Rider Routes
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/rider/broadcasted-shop-orders` | Retrieve available delivery jobs |
-| PUT | `/rider/accept-shop-order` | Accept a delivery job |
-| GET | `/rider/assigned-orders` | Retrieve assigned active deliveries |
-| GET | `/rider/delivered-orders` | Retrieve delivered orders |
-| GET | `/rider/statistics` | Retrieve rider statistics |
-| POST | `/rider/send-delivery-otp` | Send delivery-completion OTP |
-| POST | `/rider/verify-delivery-otp` | Verify delivery OTP |
-| GET | `/delivery/assigned-rider/:shop_order_id` | Retrieve assigned rider information |
-
-### Admin Routes
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| POST | `/admin/login` | Admin login |
-| POST | `/admin/logout` | Admin logout |
-| GET | `/admin/me` | Current admin |
-| GET | `/admin/dashboard` | Dashboard statistics |
-| GET | `/admin/restaurants` | All restaurants |
-| GET | `/admin/restaurants/pending` | Pending restaurants |
-| GET | `/admin/restaurants/suspended` | Suspended restaurants |
-| GET | `/admin/restaurants/:id` | Restaurant details |
-| PATCH | `/admin/restaurants/:id/approve` | Approve restaurant |
-| PATCH | `/admin/restaurants/:id/reject` | Reject restaurant |
-| PATCH | `/admin/restaurants/:id/suspend` | Suspend restaurant |
-| PATCH | `/admin/restaurants/:id/unsuspend` | Unsuspend restaurant |
-| PATCH | `/admin/users/:id/suspend` | Suspend user |
-| PATCH | `/admin/users/:id/unsuspend` | Unsuspend user |
-| GET | `/admin/customers` | List customers |
-| GET | `/admin/customers/:id` | Customer details |
-| GET | `/admin/owners` | List restaurant owners |
-| GET | `/admin/owners/:id` | Owner details |
-| GET | `/admin/riders` | List riders |
-| GET | `/admin/riders/:id` | Rider details |
-| GET | `/admin/suspended-users` | List suspended users |
-| GET | `/admin/issues` | List reported issues |
-| GET | `/admin/issues/:id` | Issue details |
-| GET | `/admin/orders` | List all orders |
-| GET | `/admin/orders/:id` | Order details |
-
-### Issue Route Alias
-
-The backend also mounts the same issue router under:
-
-```text
-/api/issue
-```
-
-in addition to:
-
-```text
-/api/issues
-```
-
-The canonical application usage is `/api/issues`.
-
----
-
-## 🗄️ Database Design
-
-The database is implemented using **PostgreSQL with PostGIS**.
-
-The database layer is not merely a persistence layer; it actively enforces business invariants through:
-
-- foreign keys;
-- enum types;
-- check constraints;
-- unique constraints;
-- partial unique indexes;
-- spatial indexes;
-- triggers;
-- SQL functions;
-- PL/pgSQL procedures;
-- transactional locking.
-
-### ER Diagram
+### Core entity relationships
 
 ```mermaid
 erDiagram
-    ADMIN
-
     CUSTOMER ||--o{ RESTAURANT : owns
-    CUSTOMER ||--o{ LOCATION : has
     CUSTOMER ||--o{ FOOD_ORDER : places
     CUSTOMER ||--o{ REVIEW : writes
-    CUSTOMER ||--o{ NOTIFICATION : receives
-    CUSTOMER ||--o{ ISSUES : reports
-    CUSTOMER ||--o{ ISSUES : involved_in
-
-    RESTAURANT ||--o{ ITEM : contains
+    RESTAURANT ||--o{ ITEM : has
     RESTAURANT ||--o{ SHOP_ORDER : receives
-    RESTAURANT ||--o{ SHOP_ORDER_DELIVERY_ASSIGNMENT : has
-
-    FOOD_ORDER ||--o{ SHOP_ORDER : contains
-    FOOD_ORDER ||--|| PAYMENT : has
-    FOOD_ORDER ||--o{ DELIVERY_OTP : verifies
-
+    FOOD_ORDER ||--o{ SHOP_ORDER : splits_into
+    FOOD_ORDER ||--o| PAYMENT : paid_by
     SHOP_ORDER ||--o{ ORDER_ITEM : contains
+    ITEM ||--o{ ORDER_ITEM : sold_as
+    ORDER_ITEM ||--o| REVIEW : reviewed_via
     SHOP_ORDER ||--o{ SHOP_ORDER_DELIVERY_ASSIGNMENT : assigned_through
-    SHOP_ORDER ||--o{ SHOP_ORDER_BROADCASTED_TO : broadcasted_to
-    SHOP_ORDER ||--o{ SHOP_ORDER_STATUS_HISTORY : records
-    SHOP_ORDER ||--o{ DELIVERY_OTP : completes
-
-    ITEM ||--o{ ORDER_ITEM : purchased_as
-    ITEM ||--o{ REVIEW : reviewed
-
-    SHOP_ORDER_DELIVERY_ASSIGNMENT ||--o{ SHOP_ORDER_BROADCASTED_TO : broadcasts
-    CUSTOMER ||--o{ SHOP_ORDER : delivers
-    CUSTOMER ||--o{ SHOP_ORDER_DELIVERY_ASSIGNMENT : accepts
-    CUSTOMER ||--o{ DELIVERY_OTP : verifies
+    SHOP_ORDER_DELIVERY_ASSIGNMENT ||--o{ SHOP_ORDER_BROADCASTED_TO : offered_to
+    SHOP_ORDER ||--o{ SHOP_ORDER_STATUS_HISTORY : audited_by
+    SHOP_ORDER ||--o{ DELIVERY_OTP : verified_by
 ```
 
-### Database Schema
+Supporting tables: `ADMIN`, `NOTIFICATION`, `ISSUES`, `PASSWORD_RESET`, `SUSPENED_EMAILS`, `LOCATION`, `AUDIT_LOG`.
 
-#### `ADMIN`
-Stores administrator credentials.
+### Integrity features
 
-```text
-email PK
-hashed_password
-```
+- **Enums** for roles, order status, assignment status, payment method/provider, item category, food type, restaurant status.
+- **CHECK constraints:** latitude/longitude ranges, `price >= 0`, `quantity > 0`, rating bounds, payment status set, `issue sender ≠ target`.
+- **Foreign keys** with `ON DELETE CASCADE` only where the child has no meaning without the parent.
+- **Unique constraints:** email, `PAYMENT.order_id` (one payment per order), `PAYMENT.transaction_id`, one review per customer per order item.
 
-#### `CUSTOMER`
-Central user entity for customers, restaurant owners, and riders.
+### Triggers, functions and procedures
 
-Important attributes:
-
-```text
-id PK
-name
-email UNIQUE
-hashed_password
-contact_no
-role
-latitude
-longitude
-location GEOGRAPHY(POINT, 4326)
-socket_id
-isonline
-created_at
-updated_at
-```
-
-#### `RESTAURANT`
-Represents restaurants managed by owners.
-
-```text
-id PK
-owner_id FK -> CUSTOMER.id
-is_approved
-status
-name
-image_link
-description
-address
-city
-latitude
-longitude
-contact_no
-rating
-created_at
-```
-
-#### `ITEM`
-Represents restaurant menu items.
-
-```text
-id PK
-restaurant_id FK -> RESTAURANT.id
-name
-category
-food_type
-description
-price
-discount_price
-image_link
-total_sold
-rating
-rating_count
-isavailable
-created_at
-updated_at
-```
-
-#### `LOCATION`
-Stores customer-associated road/city information.
-
-#### `FOOD_ORDER`
-Represents a customer's top-level order.
-
-```text
-id PK
-customer_id FK
-payment_method
-delivery_address
-latitude
-longitude
-total_amount
-created_at
-updated_at
-```
-
-#### `SHOP_ORDER`
-Splits a food order by restaurant.
-
-This is important for multi-restaurant ordering because a single `FOOD_ORDER` can contain multiple restaurant-specific `SHOP_ORDER` records.
-
-#### `ORDER_ITEM`
-Stores the item-level contents of a shop order.
-
-#### `SHOP_ORDER_DELIVERY_ASSIGNMENT`
-Tracks rider assignment lifecycle:
-
-```text
-broadcasted
-    ↓
-assigned
-    ↓
-completed
-```
-
-#### `SHOP_ORDER_BROADCASTED_TO`
-Records which riders received a particular delivery broadcast.
-
-#### `REVIEW`
-Stores customer ratings and textual reviews for purchased items.
-
-#### `PAYMENT`
-Stores payment state and transaction information.
-
-#### `PASSWORD_RESET`
-Stores password-reset OTP state.
-
-#### `DELIVERY_OTP`
-Stores delivery-completion OTP state.
-
-#### `NOTIFICATION`
-Stores application notifications, including delivery-completion notifications.
-
-#### `ISSUES`
-Stores issues reported by users.
-
-#### `SUSPENED_EMAILS`
-Stores suspended email/role combinations to prevent suspended accounts from authenticating or registering again.
-
-#### `SHOP_ORDER_STATUS_HISTORY`
-Provides an audit trail of shop-order status changes.
-
-### Relationships
-
-The principal relationships are:
-
-```text
-CUSTOMER
-   ├── owns ───────────────> RESTAURANT
-   ├── places ─────────────> FOOD_ORDER
-   ├── writes ─────────────> REVIEW
-   └── can become ─────────> delivery rider
-
-RESTAURANT
-   ├── contains ───────────> ITEM
-   └── receives ───────────> SHOP_ORDER
-
-FOOD_ORDER
-   ├── contains ───────────> SHOP_ORDER
-   └── has ────────────────> PAYMENT
-
-SHOP_ORDER
-   ├── contains ───────────> ORDER_ITEM
-   ├── has ────────────────> DELIVERY_ASSIGNMENT
-   ├── broadcasts to ──────> RIDERS
-   └── records ────────────> STATUS_HISTORY
-
-ORDER_ITEM
-   └── references ─────────> ITEM
-
-ITEM
-   └── receives ───────────> REVIEW
-```
-
-### Database Integrity and Advanced SQL Features
-
-#### Domain constraints
-
-Examples include:
-
-```sql
-CHECK (rating BETWEEN 0 AND 5)
-CHECK (price >= 0)
-CHECK (quantity > 0)
-CHECK (latitude BETWEEN -90 AND 90)
-CHECK (longitude BETWEEN -180 AND 180)
-```
-
-#### Cascading relationships
-
-Menu items and dependent order structures use `ON DELETE CASCADE` where appropriate to maintain referential consistency.
-
-#### Spatial indexing
-
-Customer locations use a PostGIS geography point with a GIST index:
-
-```sql
-CREATE INDEX idx_customer_location
-ON CUSTOMER
-USING GIST (location);
-```
-
-#### Delivery-assignment concurrency protection
-
-Partial unique indexes prevent:
-
-- multiple active assignments for the same shop order;
-- one rider from holding multiple active assignments simultaneously.
-
-#### Rating trigger
-
-A PostgreSQL trigger recalculates:
-
-- item rating;
-- restaurant rating.
-
-after a review is inserted.
-
-#### Status-history trigger
-
-Every `SHOP_ORDER.status` transition is recorded in:
-
-```text
-SHOP_ORDER_STATUS_HISTORY
-```
-
-#### Statistics functions
-
-The database provides SQL functions for:
-
-- restaurant delivery statistics;
-- rider delivery statistics.
-
-#### Transactional delivery procedure
-
-`complete_delivery(...)` performs delivery completion with row locking and validates:
-
-- existence of the shop order;
-- assigned rider identity;
-- `out_for_delivery` state;
-- active delivery assignment.
-
-It then completes the assignment, marks the shop order as delivered, and creates a customer notification.
-
----
-
-## 📡 Real-Time Communication
-
-Real-time functionality is implemented using **Socket.IO**.
-
-### Connection
-
-The frontend establishes a Socket.IO connection to the backend and registers the authenticated user's identity.
-
-### Identity registration
-
-```text
-Client
-  │
-  │ identity(userID)
-  ▼
-Socket.IO Server
-  │
-  ├── CUSTOMER.socket_id = socket.id
-  ├── CUSTOMER.isonline = TRUE
-  └── socket.join("user:<userID>")
-```
-
-### Rider location updates
-
-Riders emit:
-
-```text
-updateLocation
-```
-
-with:
-
-```json
-{
-  "latitude": 23.7,
-  "longitude": 90.4,
-  "userId": 123
-}
-```
-
-The server updates the rider's PostGIS location and broadcasts:
-
-```text
-updateRiderLocationOnCustomer
-```
-
-### Disconnect handling
-
-When a socket disconnects, the server clears the associated socket ID and marks the user offline.
-
----
-
-## 📍 Location & Geospatial Features
-
-KhaiDai uses **PostGIS** for spatial data management.
-
-Rider/customer locations are stored as:
-
-```sql
-GEOGRAPHY(POINT, 4326)
-```
-
-Coordinates are inserted using:
-
-```sql
-ST_SetSRID(
-    ST_MakePoint(longitude, latitude),
-    4326
-)
-```
-
-### Nearby rider discovery
-
-When a restaurant owner transitions an eligible shop order toward delivery, the backend searches for available riders within the configured geographic radius.
-
-The implementation uses PostGIS spatial functions such as:
-
-```text
-ST_DWithin
-ST_Distance
-```
-
-and filters riders according to delivery availability and online state.
-
-The current implementation uses a **1 km rider-broadcast radius**.
-
-### Why PostGIS?
-
-Using PostGIS rather than calculating distances entirely in application code provides:
-
-- database-level spatial querying;
-- indexed geographic lookup;
-- accurate geographic distance calculations;
-- better scalability for location-based queries;
-- cleaner separation between spatial persistence and application logic.
-
----
-
-## 🖼️ Image/File Storage
-
-Food and restaurant images are handled through:
-
-```text
-Multer
-   ↓
-Temporary local upload
-   ↓
-Cloudinary
-   ↓
-Secure image URL
-   ↓
-PostgreSQL
-```
-
-The database stores the resulting `image_link`, while the actual image binary is stored by Cloudinary.
-
-Configured through:
-
-```env
-CLOUDINARY_CLOUD_NAME=
-CLOUDINARY_API_KEY=
-CLOUDINARY_API_SECRET=
-```
-
----
-
-## 🔄 Application Flow
-
-### Customer Order Flow
-
-```text
-Customer signs in
-      ↓
-Detect / update location
-      ↓
-Select city
-      ↓
-Browse restaurants
-      ↓
-Browse restaurant menu
-      ↓
-Add items to cart
-      ↓
-Checkout
-      ↓
-Create FOOD_ORDER
-      ↓
-Create one or more SHOP_ORDER records
-      ↓
-Payment
-   ├── COD
-   └── Online → SSLCommerz
-      ↓
-Restaurant receives shop order
-```
-
-### Restaurant Order Flow
-
-```text
-SHOP_ORDER = pending
-      ↓
-Owner confirms
-      ↓
-preparing
-      ↓
-out_for_delivery
-      ↓
-Nearby riders are discovered
-      ↓
-Delivery assignment is broadcast
-```
-
-The owner cannot directly mark a shop order as `delivered`; delivery completion belongs to the rider workflow.
-
-### Rider Delivery Flow
-
-```text
-Broadcasted delivery
-       ↓
-Nearby eligible riders
-       ↓
-Rider accepts
-       ↓
-SHOP_ORDER assigned_rider_id updated
-       ↓
-Rider navigates to customer
-       ↓
-Real-time location updates
-       ↓
-Delivery OTP generated
-       ↓
-Customer receives OTP
-       ↓
-Rider submits OTP
-       ↓
-Database delivery-completion procedure
-       ↓
-SHOP_ORDER = delivered
-       ↓
-Customer notification created
-```
-
----
-
-## 🧠 Core Business Logic
-
-### Multi-restaurant ordering
-
-A single customer checkout can result in:
-
-```text
-FOOD_ORDER
-   ├── SHOP_ORDER → Restaurant A
-   ├── SHOP_ORDER → Restaurant B
-   └── SHOP_ORDER → Restaurant C
-```
-
-This allows each restaurant to independently process its portion of the order.
-
-### Order-state management
-
-Supported order states:
-
-```text
-pending
-confirmed
-preparing
-out_for_delivery
-delivered
-cancelled
-```
-
-The database maintains a history of state transitions.
-
-### Delivery assignment lifecycle
-
-```text
-broadcasted
-     ↓
-assigned
-     ↓
-completed
-```
-
-Database constraints protect active-assignment invariants.
-
-### Delivery completion
-
-Delivery completion requires:
-
-1. valid authenticated rider;
-2. rider must be the assigned rider;
-3. shop order must be `out_for_delivery`;
-4. active assignment must exist;
-5. delivery OTP must be successfully verified;
-6. completion procedure updates the order and creates a notification.
-
-### Ratings
-
-A customer can review purchased items. A uniqueness constraint prevents multiple reviews for the same customer/order-item pair.
-
-Database triggers maintain aggregate item and restaurant ratings.
-
-### Restaurant approval
-
-New restaurants are initially unapproved:
-
-```text
-is_approved = FALSE
-```
-
-Administrators can approve or reject restaurant registrations.
-
-### Suspension
-
-Suspended users are recorded in `SUSPENED_EMAILS` and are rejected by authentication/registration checks.
-
----
-
-## 🔒 Security
-
-The application implements several security controls.
-
-### Password protection
-
-Passwords are never stored as plaintext. They are hashed with:
-
-```text
-bcrypt
-```
-
-using a work factor of 12 in the implemented authentication flow.
-
-### JWT authentication
-
-JWTs are signed using:
-
-```env
-JWT_SECRET_KEY
-```
-
-and stored in HTTP-only cookies.
-
-### Role verification
-
-The authenticated user's role is read from PostgreSQL instead of relying exclusively on the role contained in the JWT.
-
-### Admin isolation
-
-Admin sessions use a separate cookie and separate middleware.
-
-### SQL injection resistance
-
-Database queries use parameterized PostgreSQL queries:
-
-```js
-pool.query(
-  "SELECT * FROM CUSTOMER WHERE id = $1",
-  [userId]
-);
-```
-
-rather than concatenating user input into SQL statements.
-
-### Upload handling
-
-Multer handles multipart uploads before images are sent to Cloudinary.
-
-### Production security considerations
-
-The current project is primarily configured for local development. A production deployment should additionally enforce:
-
-- HTTPS;
-- `secure: true` cookies;
-- environment-specific cookie settings;
-- strict production CORS origins;
-- rate limiting;
-- stronger request validation;
-- payment callback verification;
-- centralized logging;
-- secrets management;
-- API abuse protection;
-- security headers.
-
----
-
-## ⚡ Performance & Optimization
-
-### Database
-
-- GIST index on geographic customer locations.
-- Partial indexes for active rider/order assignments.
-- Unique indexes enforcing concurrency-sensitive delivery invariants.
-- SQL-side aggregation for statistics.
-- Database triggers for derived rating summaries.
-- Row-level locking for sensitive order transitions.
-- Cascading deletes for dependent records.
-
-### Backend
-
-- PostgreSQL connection pooling using `pg`.
-- Transaction blocks for multi-step state changes.
-- Parameterized SQL queries.
-- Dedicated controller/middleware separation.
-- Socket.IO for event-driven location updates instead of polling.
-
-### Frontend
-
-- Redux for shared application state.
-- Reusable API hooks.
-- Vite-based development and production builds.
-- Route-level page structure.
-- Leaflet for map rendering.
-- Socket.IO client for real-time updates.
-
----
-
-## 🧪 Testing
-
-The project currently relies primarily on **manual/integration testing through the application workflow** rather than a dedicated automated unit-test framework.
-
-### Test data
-
-The repository contains sample assets under:
-
-```text
-testDocs/
-├── burger/
-├── drink/
-├── fries/
-├── pizza/
-└── restaurant/
-```
-
-These can be used when testing restaurant/item image and content workflows.
-
-### Recommended integration test matrix
-
-| Area | Test Cases |
+| Object | Purpose |
 |---|---|
-| Authentication | signup, signin, signout, invalid password, suspended account |
-| Password Reset | OTP generation, verification, expiration, reset |
-| Restaurant | create, edit, approval, rejection, suspension |
-| Items | add, edit, delete, availability, search |
-| Cart | add/remove items, quantity changes, checkout |
-| Orders | single restaurant and multi-restaurant order |
-| Owner | status transitions and completed orders |
-| Rider | broadcast, accept, assigned orders, delivery completion |
-| Geospatial | nearby-rider discovery and location updates |
-| Payment | COD and online-payment initialization |
-| Reviews | rating submission and aggregation |
-| Issues | user submission and admin inspection |
-| Admin | dashboard, moderation, users, orders, issues |
-| Real-Time | socket identity, rider movement, disconnect |
+| `set_updated_at` (×5 tables) | Consistent `updated_at` without relying on app code |
+| `sync_customer_location` | Keeps scalar lat/long and PostGIS point consistent regardless of which path wrote |
+| `log_shop_order_status_change` | Append-only status history (`old → new`, timestamp) |
+| `maintain_item_total_sold` | Cached sales counter, adjusted only at the `delivered` boundary, reversible |
+| `refresh_rating_summaries` | Recomputes item and restaurant ratings from reviews |
+| `validate_review_purchase` | Buyer-only, delivered-only, item-must-match |
+| `validate_assigned_rider` / `validate_delivery_assignment_rider` | Assignments can only reference real riders |
+| `validate_gmail` | Email format enforced at insert |
+| `log_table_change` (×9 tables) | Generic audit log of insert/update/delete |
+| `get_nearby_available_riders(restaurant, radius)` | Spatial query + availability filter, ordered by distance |
+| `get_restaurant_delivery_statistics`, `get_rider_delivery_statistics` | Single-pass aggregates using `FILTER` |
+| `get_item_total_sold` | Ground-truth recomputation |
+| `complete_delivery(shop_order, rider)` | Atomic delivery completion (procedure) |
 
 ---
 
-## 🚀 Installation & Setup
+## Concurrency & race-condition handling
 
-### Prerequisites
+The hardest correctness problem in the system: **many riders can tap "Accept" on the same delivery at the same moment, and one rider can tap "Accept" on two deliveries at once.** The invariants are:
 
-Install the following:
+1. A delivery is accepted by **at most one** rider.
+2. A rider holds **at most one** active delivery.
 
-- Node.js
-- npm
-- PostgreSQL
-- PostGIS extension
-- Git
-- A modern browser
-
-Optional external services:
-
-- Cloudinary account
-- Gmail SMTP credentials
-- SSLCommerz sandbox/merchant credentials
-
-### 1. Clone the repository
-
-```bash
-git clone <repository-url>
-cd buet-cse-2-1-project-food-order-and-delivery-main
+```mermaid
+sequenceDiagram
+    participant R1 as Rider A
+    participant R2 as Rider B
+    participant API as Express (any instance)
+    participant DB as PostgreSQL
+    R1->>API: accept(shop_order 42)
+    R2->>API: accept(shop_order 42)
+    API->>DB: BEGIN + pg_advisory_xact_lock(riderA)
+    API->>DB: BEGIN + pg_advisory_xact_lock(riderB)
+    API->>DB: SELECT assignment FOR UPDATE (A wins the row lock)
+    Note over DB: B's transaction waits on the row lock
+    API->>DB: UPDATE assignment → assigned, UPDATE shop_order, COMMIT
+    DB-->>R1: 200 accepted
+    DB-->>R2: re-reads row: already assigned → 409
 ```
 
-### 2. Install backend dependencies
+| Race | Layer that stops it |
+|---|---|
+| Two riders accept the same delivery | `SELECT … FOR UPDATE` on the assignment and shop-order rows; the loser re-reads committed state and gets `409` |
+| One rider accepts two different deliveries concurrently | `pg_advisory_xact_lock(rider_id)` serializes accepts per rider. `FOR UPDATE` can't lock a row that *doesn't exist yet*, so this closes the "both saw no active order" gap. Released automatically at `COMMIT`/`ROLLBACK`, and works across multiple server instances |
+| Anything that slips past application logic (another service, a bug, a manual SQL write) | Partial unique indexes: `uq_active_delivery_assignment_per_shop_order` (one live assignment per order) and `uq_active_delivery_assignment_per_rider` (one `assigned` row per rider). A violation (`23505`) is mapped to a clean `409` |
+| Two owners/requests broadcasting the same order | Shop order is row-locked while the broadcast is created |
+| OTP verified twice / concurrently | OTP row locked `FOR UPDATE`, `verified` checked inside the transaction, completion done in `complete_delivery` under another row lock |
+| Duplicate reviews | `UNIQUE (customer_id, order_item_id)` |
+| Duplicate payment for one order | `UNIQUE (order_id)` on `PAYMENT` |
 
-```bash
-cd backend
-npm install
-```
-
-### 3. Install frontend dependencies
-
-```bash
-cd ../frontend
-npm install
-```
-
-### 4. Create PostgreSQL database
-
-Create a PostgreSQL database, for example:
-
-```sql
-CREATE DATABASE khaidai;
-```
-
-Connect to the database and execute:
-
-```text
-backend/config/database.sql
-```
-
-> **Important:** `database.sql` contains `DROP TABLE` and `DROP TYPE ... CASCADE` statements. It is intended as a schema initialization/reset script. Do not run it against a database containing data you need to preserve.
-
-### 5. Enable PostGIS
-
-The schema begins with:
-
-```sql
-CREATE EXTENSION IF NOT EXISTS postgis;
-```
-
-The PostgreSQL installation must therefore have PostGIS available.
-
-### 6. Configure backend environment
-
-Create:
-
-```text
-backend/.env
-```
-
-using the variables listed below.
-
-### 7. Start the backend
-
-```bash
-cd backend
-npm run dev
-```
-
-### 8. Start the frontend
-
-In another terminal:
-
-```bash
-cd frontend
-npm run dev
-```
-
-The frontend is configured to communicate with:
-
-```text
-http://localhost:3000
-```
-
-while the backend port is controlled by:
-
-```env
-BACKEND_PORT
-```
-
-Make sure the frontend URL and backend CORS configuration are consistent.
+**Why partial indexes?** `WHERE assignment_status IN ('broadcasted','assigned')` lets historical `completed` rows coexist while forbidding two *live* rows, a constraint a plain `UNIQUE` can't express.
 
 ---
 
-## ⚙️ Environment Variables
+## Business logic
 
-Create `backend/.env`:
+**Order lifecycle (per restaurant):**
+
+```text
+pending → confirmed → preparing → out_for_delivery → delivered
+                                       ▲
+              requires ≥1 nearby available rider
+```
+
+- Delivery fee is computed server-side (free above a subtotal threshold).
+- On `out_for_delivery`, the system creates **one** assignment, queries riders within 1 km via PostGIS, records every eligible rider in `SHOP_ORDER_BROADCASTED_TO`, writes a persistent notification for each, and emits a Socket.IO offer.
+- A rider may only accept a job that was broadcast to them.
+- Only the assigned rider, with a valid OTP, can complete delivery.
+
+**"Available rider"** means: role is rider, within the radius, no active shop order, and no active assignment.
+
+**Ratings:** only delivered items can be reviewed, only by the purchaser, once per order item; item and restaurant averages are recomputed by trigger.
+
+**Moderation:** restaurants start unapproved. Admins approve, reject or suspend; suspended emails are blocked at sign-in and registration and checked on every authenticated request.
+
+---
+
+## Database optimization
+
+- **GiST spatial index** on `CUSTOMER.location` for radius queries.
+- **Partial indexes** on active riders and active assignments: small, hot indexes that ignore historical rows.
+- **Indexes on OTP lookups** (`shop_order_id`, `rider_id`, `customer_email`).
+- **Push computation into SQL:** statistics use `COUNT(*) FILTER (…)` / `SUM … FILTER` in a single scan instead of several round trips or app-side loops.
+- **Trigger-maintained counters** avoid re-aggregating order history on every menu render.
+- **Pooled connections** (`pg.Pool`) with explicit `connect → BEGIN → COMMIT/ROLLBACK → release` for multi-step operations.
+- **Search ranking in SQL:** exact match → prefix → substring ordering via `CASE`.
+- **Event-driven location updates** over WebSocket instead of client polling.
+
+> Performance note: figures from `EXPLAIN ANALYZE` and concurrent-load tests are on the roadmap below. Nothing here claims benchmark numbers that haven't been measured.
+
+---
+
+## Real-time layer
+
+- Clients register with an `identity` event and join a private room `user:<id>`; the server tracks `socket_id` and `isonline` and clears them on disconnect.
+- Riders stream `updateLocation` (browser `watchPosition`) → PostGIS update → broadcast to customers tracking the delivery.
+- Targeted events: `new_shop_order`, `order_status_changed`, `order_rider_assigned`, `new_delivery_offer`.
+- Offers are **also persisted** in `NOTIFICATION`, so a rider who was offline at broadcast time doesn't lose them.
+- Events fire after the DB transaction commits.
+
+---
+
+## Security
+
+- Passwords: bcrypt, cost 12.
+- Sessions: JWT in `httpOnly`, `SameSite=strict` cookie; separate `adminToken` cookie and middleware for the admin domain.
+- Authorization: role and suspension are read from the DB per request; owner-only and rider-only actions are checked in controllers; ownership is validated in the query (`WHERE id = $1 AND owner_id = $2`).
+- Injection: all queries are parameterized.
+- Delivery OTP: 6 digits, bcrypt-hashed, 10-minute expiry, single use.
+- Password reset: hashed OTP with expiry and verified-state tracking.
+- Uploads: Multer → Cloudinary; DB stores only the URL.
+
+---
+
+## Known limitations & roadmap
+
+Stating these plainly is deliberate. The project is under active development.
+
+**Known limitations**
+
+- **Payments:** SSLCommerz initiation is implemented; success/fail/cancel/IPN callbacks and server-side validation are not yet wired, because sandbox access needs a merchant account that hasn't been provisioned. Gateway call currently happens inside the DB transaction and should be moved outside it.
+- **Sockets:** `identity`/`updateLocation` trust a client-supplied user id and location broadcasts go to all clients; both should be bound to the authenticated session and scoped to the relevant customer room.
+- **Order cancellation** deletes the shop order; it should become a `cancelled` status so history is preserved. Status transitions aren't yet validated against an explicit state machine.
+- **Checkout checks:** item availability and restaurant-open state aren't re-validated at order creation.
+- **OTP brute-force:** no attempt limit yet.
+- **Search:** `ILIKE '%…%'` won't use a B-tree at scale.
+- **Production hardening:** `secure` cookies, env-driven CORS, rate limiting, security headers.
+- **Testing:** no automated test suite yet.
+
+**Roadmap**
+
+1. **Concurrency test harness:** N parallel accepts, assert exactly one winner; publish results.
+2. **Performance pass:** `EXPLAIN ANALYZE` on hot queries, `pg_trgm` GIN index for search, k6 load tests.
+3. **Payment callbacks** and idempotent webhook handling.
+4. **Socket authentication** and room-scoped tracking.
+5. **State-machine table** for allowed order transitions; soft-cancel.
+6. **CI** with integration tests against a PostGIS container.
+7. **AI features** (planned): natural-language / semantic menu search, ETA and demand prediction, smarter rider ranking beyond straight-line distance.
+
+---
+
+## Getting started
+
+**Prerequisites:** Node.js 20+, PostgreSQL 14+ with PostGIS. Optional: Cloudinary, Gmail app password, SSLCommerz sandbox credentials.
+
+```bash
+git clone https://github.com/unthinkingFool/buet-cse-2-1-project-food-order-and-delivery.git
+cd buet-cse-2-1-project-food-order-and-delivery
+
+# backend
+cd backend && npm install
+
+# frontend
+cd ../frontend && npm install
+```
+
+**Database** (run in this order):
+
+```bash
+createdb khaidai
+psql -d khaidai -f backend/config/database.sql                 # schema (⚠ contains DROP statements; for fresh setup only)
+psql -d khaidai -f backend/config/database_business_logic.sql  # triggers, functions, procedure
+psql -d khaidai -f backend/config/concurrency_hardening.sql    # idempotent index hardening
+```
+
+Create an admin by generating a bcrypt hash (see `backend/config/generateAdminPassword.js`, and **change the password in that script first**) and inserting it into `ADMIN`.
+
+**Backend `.env`:**
 
 ```env
-# Server
 BACKEND_PORT=3000
 NODE_ENV=development
-
-# PostgreSQL
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=khaidai
 DB_USER=postgres
-DB_PASSWORD=your_database_password
-
-# Authentication
-JWT_SECRET_KEY=your_long_random_jwt_secret
-
-# Cloudinary
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
-
-# Email / SMTP
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASSWORD=your_email_app_password
-
-# Frontend / Backend URLs
+DB_PASSWORD=...
+JWT_SECRET_KEY=...
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+EMAIL_USER=...
+EMAIL_PASSWORD=...
 CLIENT_URL=http://localhost:5173
 SERVER_URL=http://localhost:3000
-
-# SSLCommerz
 SSLCOMMERZ_IS_SANDBOX=true
-SSLCOMMERZ_STORE_ID=your_store_id
-SSLCOMMERZ_STORE_PASSWORD=your_store_password
+SSLCOMMERZ_STORE_ID=...
+SSLCOMMERZ_STORE_PASSWORD=...
 ```
 
-### Environment-variable responsibilities
+**Frontend `.env`:** `VITE_GEOAPIFY_API_KEY=...` (geocoding) plus the backend URL variable used in `frontend/src`.
 
-| Variable | Purpose |
+```bash
+cd backend && npm run dev      # API + Socket.IO
+cd frontend && npm run dev     # http://localhost:5173
+```
+
+Never commit `.env` files.
+
+---
+
+## API overview
+
+~69 endpoints under `/api`. Protected routes use the `token` cookie; admin routes use `adminToken`.
+
+| Module | Examples |
 |---|---|
-| `BACKEND_PORT` | Express/Socket.IO server port |
-| `DB_HOST` | PostgreSQL host |
-| `DB_PORT` | PostgreSQL port |
-| `DB_NAME` | Database name |
-| `DB_USER` | PostgreSQL user |
-| `DB_PASSWORD` | PostgreSQL password |
-| `NODE_ENV` | Runtime environment |
-| `JWT_SECRET_KEY` | JWT signing secret |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary account |
-| `CLOUDINARY_API_KEY` | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
-| `EMAIL_USER` | SMTP sender account |
-| `EMAIL_PASSWORD` | SMTP credential/app password |
-| `CLIENT_URL` | Frontend URL used by payment callbacks/configuration |
-| `SERVER_URL` | Backend URL used for payment callbacks |
-| `SSLCOMMERZ_IS_SANDBOX` | Select SSLCommerz sandbox/production gateway |
-| `SSLCOMMERZ_STORE_ID` | SSLCommerz store ID |
-| `SSLCOMMERZ_STORE_PASSWORD` | SSLCommerz store password |
-
-Never commit `.env` files or real credentials to version control.
+| `/auth` | signup, signin, signout, send-otp, verify-otp, reset-password |
+| `/user` | current user, update location, received orders, delivery notifications |
+| `/restaurant` | create/edit, by city, menu, completed orders, statistics, open/close |
+| `/item` | add/edit/delete, availability, search, total sold, rating |
+| `/order` | create, list, shop-order detail, **status update (owner)** |
+| `/rider` | broadcasted jobs, **accept**, assigned, delivered, statistics, send/verify delivery OTP |
+| `/delivery` | assigned-rider lookup |
+| `/payment` | initiate |
+| `/issues` | report, my issues |
+| `/admin` | login, dashboard, restaurants (approve/reject/suspend), users, orders, issues |
 
 ---
 
-## ▶️ Running the Project
-
-### Terminal 1 — Backend
-
-```bash
-cd backend
-npm run dev
-```
-
-### Terminal 2 — Frontend
-
-```bash
-cd frontend
-npm run dev
-```
-
-### Expected development topology
+## Project structure
 
 ```text
-Frontend
-http://localhost:5173
-        │
-        │ HTTP + WebSocket
-        ▼
-Backend
-http://localhost:3000
-        │
-        ▼
-PostgreSQL + PostGIS
-localhost:5432
+backend/
+  config/        db pool, mail, schema + business-logic SQL
+  controllers/   admin · auth · delivery · deliveryOtp · forget · issues · item · order · payment · restaurant · rider · user
+  middlewares/   isAuth · adminAuth · multer
+  routes/        one router per module
+  utils/         jwt · otp · cloudinary
+  socket.js      Socket.IO identity, location, presence
+frontend/src/
+  pages/         route-level screens (customer, owner, rider, admin)
+  components/    dashboards, cards, navigation
+  hooks/         API data hooks
+  redux/         user · owner · rider · admin · map slices
+testDocs/        sample images for seeding menus
 ```
-
-The exact backend port is controlled by `BACKEND_PORT`.
 
 ---
 
-## 📚 API Documentation
+## Credits
 
-The API is organized around resource-oriented route modules:
+Built for BUET CSE 2-1 Database Management Sessional.
 
-```text
-/api/auth
-/api/user
-/api/restaurant
-/api/item
-/api/order
-/api/rider
-/api/delivery
-/api/admin
-/api/issues
-/api/payment
-```
+**Swapnil Das** ([@unthinkingFool](https://github.com/unthinkingFool) · [LinkedIn](https://www.linkedin.com/in/swapnil-das-603824236)): project lead and primary developer.
+Product and system design; the complete React frontend; REST API and business workflows (multi-restaurant order decomposition, status flow, rider broadcast and acceptance, delivery OTP, payments initiation); PostGIS rider discovery; row-level locking flow; authentication, authorization and security; Socket.IO real-time layer; the trigger and function suite in `database_business_logic.sql`; system integration.
 
-### Authentication convention
-
-Protected user endpoints expect:
-
-```text
-Cookie: token=<JWT>
-```
-
-Protected admin endpoints expect:
-
-```text
-Cookie: adminToken=<JWT>
-```
-
-The browser normally manages these cookies automatically when Axios and the server are configured for credentialed requests.
-
-### HTTP status conventions
-
-The backend commonly uses:
-
-```text
-200 OK
-201 Created
-400 Bad Request
-401 Unauthorized
-403 Forbidden
-404 Not Found
-500 Internal Server Error
-502 Bad Gateway
-```
-
-### API design principles
-
-- Authentication is handled through middleware.
-- Authorization is enforced at controller level where role-specific behavior is required.
-- Database access uses parameterized queries.
-- Controllers return JSON responses.
-- Multipart endpoints use Multer.
-- Real-time operations are separated from REST request/response flows.
-
-For interactive API exploration, the route tables in this README can be imported into a client such as Postman or Insomnia to construct a dedicated collection.
+**Nazmul Hasan Rafi:** database collaborator.
+Relational schema and database feature work, including the per-rider advisory-lock serialization, the first version of the concurrency-protecting partial unique indexes, the initial `complete_delivery` procedure and statistics functions, and related controller hardening.
 
 ---
 
-## 📊 Monitoring & Error Handling
-
-### Backend error handling
-
-Controllers generally:
-
-- validate request parameters;
-- validate authenticated identity;
-- handle PostgreSQL errors;
-- log server-side failures;
-- return structured JSON error responses.
-
-### Database errors
-
-Database operations use PostgreSQL connection pooling:
-
-```text
-HTTP request
-    ↓
-pool.connect()
-    ↓
-SQL query / transaction
-    ↓
-COMMIT / ROLLBACK
-    ↓
-client.release()
-```
-
-Critical multi-step operations use explicit transactions.
-
-### Socket error handling
-
-Socket handlers catch errors independently so that a failure in one location update does not terminate the entire Socket.IO server.
-
-### Payment errors
-
-The SSLCommerz integration checks the gateway response and handles unsuccessful gateway initialization before committing the payment record.
-
-### Production observability
-
-For a production deployment, centralized structured logging and application monitoring should be added on top of the current console-based diagnostics.
-
----
-
-## 📝 Development Guidelines
-
-### Backend
-
-1. Keep routing definitions inside `routes/`.
-2. Keep business logic inside controllers/services.
-3. Reuse authentication middleware instead of duplicating JWT verification.
-4. Use parameterized SQL queries.
-5. Use database transactions for multi-step state transitions.
-6. Enforce important invariants at the database layer whenever practical.
-7. Do not expose credentials or secrets in source code.
-8. Keep Socket.IO events focused on real-time state synchronization.
-9. Validate ownership before allowing owner-specific mutations.
-10. Preserve foreign-key and enum constraints when modifying the schema.
-
-### Frontend
-
-1. Keep route-level UI inside `pages/`.
-2. Extract reusable UI into `components/`.
-3. Use custom hooks for API-driven data retrieval.
-4. Keep global state in Redux slices.
-5. Avoid duplicating server state unnecessarily.
-6. Keep role-specific UI behavior explicit.
-7. Use consistent API error handling.
-8. Avoid committing environment secrets.
-
-### Database
-
-1. Use foreign keys for entity relationships.
-2. Prefer constraints over application-only assumptions.
-3. Add indexes based on actual query patterns.
-4. Use transactions for related state changes.
-5. Use triggers/functions/procedures only where database-level behavior provides a clear consistency benefit.
-6. Document schema changes.
-7. Never run destructive schema-reset scripts against production data.
-
----
-
-## 🤝 Contributing
-
-This project was developed as a BUET CSE 2-1 sessional academic project.
-
-For educational extensions or collaborative development:
-
-1. Fork the repository.
-2. Create a feature branch.
-
-```bash
-git checkout -b feature/your-feature
-```
-
-3. Make focused changes.
-4. Test the affected workflow.
-5. Commit with a descriptive message.
-
-```bash
-git commit -m "feat: add delivery tracking improvement"
-```
-
-6. Push the branch.
-
-```bash
-git push origin feature/your-feature
-```
-
-7. Open a pull request with:
-   - problem description;
-   - implementation summary;
-   - database changes, if any;
-   - API changes, if any;
-   - testing performed.
-
----
-
-## 📄 License
-
-This repository was created as an academic project for the **Database Management Sessional course of BUET CSE 2-1**.
-
-Unless a separate license is added to the repository, the project should be treated as an **academic/educational codebase**. Reuse, redistribution, or commercial deployment should be coordinated with the project authors.
-
----
-
-## 👨‍💻 Author
-
-###  Developer
-
-**Swapnil Das**
-
-Primary responsibilities:
-
-- Frontend architecture and implementation
-- React application development
-- Redux state management
-- UI/UX implementation
-- Backend API development
-- Express controller and routing implementation
-- Authentication and authorization integration
-- Real-time Socket.IO integration
-- Geospatial delivery logic integration
-- Cloudinary integration
-- Payment integration
-- Backend/database integration
-- Database design
-- Database setup and project integration
-- Relational schema development
-- Entity/relationship modeling
-- SQL implementation
-- Database constraints and relationships
-
-### Database Contributor
-
-**Nazmul Hasan Rafi**
-
-Primary contribution:
-
-- Backend
-- Database design
-- Relational schema development
-- Entity/relationship modeling
-- SQL implementation
-- Database constraints and relationships
-- Database-level functionality and optimization
-
-### Academic Context
-
-**Course:** Database Management Sessional  
-**Institution:** Bangladesh University of Engineering and Technology (BUET)  
-**Department:** Computer Science and Engineering (CSE)  
-**Semester:** CSE 2-1
-
----
-
-## Project Summary
-
-KhaiDai demonstrates the integration of **relational database design, transaction management, spatial databases, RESTful APIs, authentication, real-time communication, payment processing, cloud storage, and role-based application workflows** into a single full-stack system.
-
-The project particularly emphasizes database-backed business rules, including **multi-restaurant order decomposition, delivery-assignment concurrency protection, spatial rider discovery, rating aggregation, order-status auditing, transactional delivery completion, and referential integrity**.
-
-```text
-React + Redux
-      │
-      ▼
-Express + REST + Socket.IO
-      │
-      ▼
-PostgreSQL + PostGIS
-      │
-      ├── Authentication
-      ├── Restaurants / Items
-      ├── Orders / Payments
-      ├── Delivery Assignments
-      ├── Reviews / Ratings
-      ├── Notifications
-      ├── Issues
-      ├── Spatial Queries
-      └── Database Procedures / Triggers
-```
-
-**KhaiDai — A database-driven food ordering and real-time delivery platform.**
+_KhaiDai is actively maintained. Issues and suggestions are welcome._

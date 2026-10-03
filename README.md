@@ -7,7 +7,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-PostGIS-4169E1?logo=postgresql&logoColor=white)](#database-design)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-realtime-010101?logo=socket.io&logoColor=white)](#real-time-layer)
 
-**Demo video:** _coming soon (Loom)_ · **Repo:** [unthinkingFool/buet-cse-2-1-project-food-order-and-delivery](https://github.com/unthinkingFool/buet-cse-2-1-project-food-order-and-delivery)
+[![KhaiDai demo video](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)]([https://www.youtube.com/watch?v=VIDEO_ID](https://www.youtube.com/watch?v=5SuGwjlvvss&t=7s)) ·  **Repo:** [unthinkingFool/buet-cse-2-1-project-food-order-and-delivery](https://github.com/unthinkingFool/buet-cse-2-1-project-food-order-and-delivery)
 
 <!-- Add 3–4 screenshots/GIFs here: customer home, owner order board, rider live map, admin dashboard. -->
 
